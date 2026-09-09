@@ -26,11 +26,7 @@ export class RabbitMqService implements OnModuleDestroy {
     const connection = await this.getConnection();
     const channel = await connection.createChannel();
     try {
-      await channel.assertExchange(
-        this.configService.getOrThrow<string>('RABBITMQ_EVENTS_EXCHANGE'),
-        'topic',
-        { durable: true },
-      );
+      await this.assertAlertTopology(channel);
       await channel.assertQueue(
         this.configService.getOrThrow<string>('RABBITMQ_HEALTH_QUEUE'),
         {
@@ -40,6 +36,40 @@ export class RabbitMqService implements OnModuleDestroy {
     } finally {
       await channel.close();
     }
+  }
+
+  async createChannel(): Promise<amqp.Channel> {
+    return (await this.getConnection()).createChannel();
+  }
+
+  async assertAlertTopology(channel: amqp.Channel): Promise<void> {
+    const eventsExchange = this.configService.getOrThrow<string>(
+      'RABBITMQ_EVENTS_EXCHANGE',
+    );
+    const alertQueue = this.configService.getOrThrow<string>(
+      'RABBITMQ_ALERT_QUEUE',
+    );
+    const retryQueue = this.configService.getOrThrow<string>(
+      'RABBITMQ_ALERT_RETRY_QUEUE',
+    );
+    const deadLetterExchange = `${eventsExchange}.dlx`;
+    const deadLetterQueue = `${eventsExchange}.dlq`;
+
+    await channel.assertExchange(eventsExchange, 'topic', { durable: true });
+    await channel.assertExchange(deadLetterExchange, 'topic', {
+      durable: true,
+    });
+    await channel.assertQueue(deadLetterQueue, { durable: true });
+    await channel.bindQueue(deadLetterQueue, deadLetterExchange, '#');
+    await channel.assertQueue(alertQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': deadLetterExchange },
+    });
+    await channel.bindQueue(alertQueue, eventsExchange, '#');
+    await channel.assertQueue(retryQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': eventsExchange },
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

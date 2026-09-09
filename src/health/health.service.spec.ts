@@ -4,6 +4,7 @@ import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../database/prisma.service';
 import { RabbitMqService } from '../rabbitmq/rabbitmq.service';
 import { HealthService } from './health.service';
+import { ZASMAOLT_ADAPTER } from '../integrations/zasmaolt/zasmaolt.adapter';
 
 describe('HealthService', () => {
   it('reports healthy when every dependency is available', async () => {
@@ -32,6 +33,10 @@ describe('HealthService', () => {
         {
           provide: ConfigService,
           useValue: { getOrThrow: jest.fn().mockReturnValue('.') },
+        },
+        {
+          provide: ZASMAOLT_ADAPTER,
+          useValue: { checkHealth: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

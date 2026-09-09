@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -13,11 +13,31 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService);
   app.useLogger(logger);
   app.use(helmet());
+  const corsOrigins = config
+    .getOrThrow<string>('CORS_ORIGINS')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: config.getOrThrow<string>('CORS_ORIGINS').split(','),
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allowed?: boolean) => void,
+    ) => {
+      if (!origin || corsOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS policy'));
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'x-integration-api-key'],
+    maxAge: 600,
   });
-  app.setGlobalPrefix(config.getOrThrow<string>('API_PREFIX'));
+  const httpServer = app.getHttpAdapter().getInstance() as {
+    set(setting: string, value: boolean): void;
+  };
+  httpServer.set('trust proxy', config.getOrThrow<boolean>('TRUST_PROXY'));
+  app.setGlobalPrefix(config.getOrThrow<string>('API_PREFIX'), {
+    exclude: [{ path: 'metrics', method: RequestMethod.GET }],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -28,18 +48,27 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalFilters(new GlobalExceptionFilter(logger));
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('api_incidentReport')
-    .setDescription(
-      'Independent incident reporting service for ISP/FTTH operations',
-    )
-    .setVersion('0.1.0')
-    .build();
-  SwaggerModule.setup(
-    'api/docs',
-    app,
-    SwaggerModule.createDocument(app, swaggerConfig),
-  );
+  const swaggerEnabled =
+    config.get<boolean>('SWAGGER_ENABLED') ??
+    config.getOrThrow<string>('NODE_ENV') !== 'production';
+  if (swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('api_incidentReport')
+      .setDescription(
+        'Independent incident reporting service for ISP/FTTH operations',
+      )
+      .setVersion('0.1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'access-token',
+      )
+      .build();
+    SwaggerModule.setup(
+      'api/docs',
+      app,
+      SwaggerModule.createDocument(app, swaggerConfig),
+    );
+  }
 
   await app.listen(config.getOrThrow<number>('PORT'));
 }

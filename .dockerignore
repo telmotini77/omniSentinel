@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+storage
+
+# Local configuration and secrets must not become part of an image layer.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+npm-debug.log*
+*.tsbuildinfo

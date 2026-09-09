@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../database/prisma.service';
 import { RabbitMqService } from '../rabbitmq/rabbitmq.service';
 import { access } from 'node:fs/promises';
+import {
+  ZASMAOLT_ADAPTER,
+  type ZasmaoltAdapter,
+} from '../integrations/zasmaolt/zasmaolt.adapter';
 
 type DependencyStatus = 'up' | 'down';
 type HealthResult = {
@@ -24,6 +28,7 @@ export class HealthService {
     private readonly redis: RedisService,
     private readonly rabbitMq: RabbitMqService,
     private readonly configService: ConfigService,
+    @Inject(ZASMAOLT_ADAPTER) private readonly zasmaolt: ZasmaoltAdapter,
   ) {}
 
   async check(): Promise<HealthResult> {
@@ -31,7 +36,7 @@ export class HealthService {
       this.checkDependency(() => this.prisma.$queryRaw`SELECT 1`),
       this.checkDependency(() => this.redis.ping()),
       this.checkDependency(() => this.rabbitMq.assertInfrastructure()),
-      this.checkZasmaolt(),
+      this.checkDependency(() => this.zasmaolt.checkHealth()),
       this.checkDependency(() =>
         access(this.configService.getOrThrow<string>('REPORT_STORAGE_PATH')),
       ),
@@ -55,24 +60,5 @@ export class HealthService {
     } catch {
       return 'down';
     }
-  }
-
-  private async checkZasmaolt(): Promise<DependencyStatus> {
-    return this.checkDependency(async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2_000);
-      try {
-        const response = await fetch(
-          this.configService.getOrThrow<string>('ZASMAOLT_API_URL'),
-          {
-            method: 'HEAD',
-            signal: controller.signal,
-          },
-        );
-        if (response.status >= 500) throw new Error('Upstream service error');
-      } finally {
-        clearTimeout(timeout);
-      }
-    });
   }
 }

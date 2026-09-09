@@ -32,7 +32,7 @@ services:
       POSTGRES_PASSWORD: "123456"
     hostname: postgres.db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -40,7 +40,7 @@ services:
         aliases:
           - postgres.db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U incident_user -d incident_report"]
+      test: ["CMD-SHELL", "pg_isready -U incident_user -d omniSentinel_db"]
       interval: 5s
       timeout: 5s
       retries: 10

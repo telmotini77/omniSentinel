@@ -17,3 +17,490 @@ model SystemSetting {
 
   @@map("system_settings")
 }
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  MINOR
+  MAJOR
+  CRITICAL
+  DISASTER
+}
+
+enum AlertSource {
+  ZABBIX
+  SMARTOLT
+  API_ZASMAOLT
+  MANUAL
+}
+
+enum AlertStatus {
+  NEW
+  PROCESSING
+  CORRELATED
+  IGNORED
+  RESOLVED
+  ERROR
+}
+
+enum IncidentStatus {
+  DETECTED
+  INVESTIGATING
+  CONFIRMED
+  IN_PROGRESS
+  MONITORING
+  RESOLVED
+  CLOSED
+  FALSE_POSITIVE
+}
+
+enum IncidentType {
+  ONU
+  PON
+  OLT
+  UPLINK
+  NETWORK
+  UNKNOWN
+}
+
+enum RootCause {
+  ONU_FAILURE
+  ONU_POWER_FAILURE
+  ONU_LOS
+  SIGNAL_DEGRADATION
+  PON_FAILURE
+  OLT_FAILURE
+  UPLINK_FAILURE
+  MULTIPLE_ONU_FAILURE
+  UNKNOWN
+}
+
+model User {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique @db.VarChar(255)
+  username     String         @unique @db.VarChar(50)
+  displayName  String         @db.VarChar(150)
+  passwordHash String
+  status       UserStatus     @default(ACTIVE)
+  lastLoginAt  DateTime?
+  roles        UserRole[]
+  refreshTokens RefreshToken[]
+  assignedIncidents Incident[] @relation("IncidentAssignee")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique @db.VarChar(50)
+  description String?          @db.VarChar(255)
+  users       UserRole[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique @db.VarChar(100)
+  description String?          @db.VarChar(255)
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  createdAt    DateTime   @default(now())
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?   @db.VarChar(500)
+  ipAddress String?   @db.VarChar(64)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Alert {
+  id              String        @id @default(uuid()) @db.Uuid
+  externalEventId String        @unique @db.VarChar(150)
+  eventType       String        @db.VarChar(100)
+  severity        AlertSeverity
+  source          AlertSource
+  status          AlertStatus   @default(NEW)
+  message         String?       @db.Text
+  oltExternalId   String?       @db.VarChar(150)
+  ponIdentifier   String?       @db.VarChar(100)
+  onuSerial       String?       @db.VarChar(150)
+  customerCode    String?       @db.VarChar(150)
+  payload         Json
+  detectedAt      DateTime
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  incidentEvent   IncidentEvent?
+  correlationResult CorrelationResult?
+
+  @@index([status])
+  @@index([severity])
+  @@index([detectedAt])
+  @@index([oltExternalId])
+  @@index([ponIdentifier])
+  @@index([onuSerial])
+  @@index([customerCode])
+  @@index([eventType, detectedAt])
+  @@map("alerts")
+}
+
+model IncidentSequence {
+  year       Int      @id
+  nextNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@map("incident_sequences")
+}
+
+model Incident {
+  id                     String          @id @default(uuid()) @db.Uuid
+  code                   String          @unique @db.VarChar(32)
+  title                  String          @db.VarChar(255)
+  description            String?         @db.Text
+  type                   IncidentType
+  severity               AlertSeverity
+  status                 IncidentStatus  @default(DETECTED)
+  source                 AlertSource
+  rootCause              RootCause       @default(UNKNOWN)
+  rootCauseConfidence    Int             @default(0)
+  oltExternalId          String?         @db.VarChar(150)
+  ponIdentifier          String?         @db.VarChar(100)
+  onuSerial              String?         @db.VarChar(150)
+  correlationKey         String?         @db.VarChar(255)
+  affectedCustomerCount  Int             @default(0)
+  potentialCustomerCount Int             @default(0)
+  confirmedCustomerCount Int             @default(0)
+  onlineCustomerCount    Int             @default(0)
+  offlineOnuCount        Int             @default(0)
+  onlineOnuCount         Int             @default(0)
+  detectedAt             DateTime
+  startedAt              DateTime
+  acknowledgedAt         DateTime?
+  resolvedAt             DateTime?
+  closedAt               DateTime?
+  durationSeconds        Int             @default(0)
+  assignedUserId         String?         @db.Uuid
+  assignedUser           User?           @relation("IncidentAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  events                 IncidentEvent[]
+  timeline               IncidentTimeline[]
+  customers              IncidentCustomer[]
+  correlationResults     CorrelationResult[]
+  reports                Report[]
+  notifications          Notification[]
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([status])
+  @@index([severity])
+  @@index([detectedAt])
+  @@index([oltExternalId])
+  @@index([ponIdentifier])
+  @@index([assignedUserId])
+  @@index([correlationKey, status, detectedAt])
+  @@map("incidents")
+}
+
+model CorrelationRule {
+  id                       String         @id @default(uuid()) @db.Uuid
+  name                     String         @unique @db.VarChar(120)
+  description              String?        @db.Text
+  enabled                  Boolean        @default(true)
+  priority                 Int            @default(100)
+  eventPattern             String         @default("*") @db.VarChar(120)
+  minimumEventCount        Int?
+  minimumDistinctOnus      Int?
+  minimumAffectedCustomers Int?
+  incidentType             IncidentType?
+  rootCause                RootCause?
+  rootCauseConfidence      Int?
+  severity                 AlertSeverity?
+  results                  CorrelationResult[]
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  @@index([enabled, priority])
+  @@map("correlation_rules")
+}
+
+model CorrelationResult {
+  id                     String        @id @default(uuid()) @db.Uuid
+  alertId                String        @unique @db.Uuid
+  incidentId             String?       @db.Uuid
+  correlationRuleId      String?       @db.Uuid
+  correlationKey         String        @db.VarChar(255)
+  eventCount             Int           @default(1)
+  distinctOnuCount       Int           @default(0)
+  affectedCustomerCount  Int           @default(0)
+  rootCause              RootCause     @default(UNKNOWN)
+  rootCauseConfidence    Int           @default(0)
+  severity               AlertSeverity
+  createdAt              DateTime      @default(now())
+  alert                  Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  incident               Incident?     @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  correlationRule        CorrelationRule? @relation(fields: [correlationRuleId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@index([correlationKey, createdAt])
+  @@index([correlationRuleId])
+  @@map("correlation_results")
+}
+
+enum ReportType {
+  INCIDENT_REPORT
+  CUSTOMER_IMPACT_REPORT
+  OLT_REPORT
+  PON_REPORT
+  CUSTOMER_REPORT
+  DAILY_REPORT
+  WEEKLY_REPORT
+  MONTHLY_REPORT
+  SLA_REPORT
+  AVAILABILITY_REPORT
+  OUTAGE_REPORT
+}
+
+enum ReportFormat {
+  PDF
+  XLSX
+  CSV
+  JSON
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+model Report {
+  id          String       @id @default(uuid()) @db.Uuid
+  type        ReportType
+  format      ReportFormat
+  status      ReportStatus @default(PENDING)
+  incidentId  String?      @db.Uuid
+  title       String       @db.VarChar(255)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  fileName    String?      @db.VarChar(255)
+  filePath    String?      @db.VarChar(1000)
+  fileSize    Int?
+  generatedBy String?      @db.VarChar(150)
+  generatedAt DateTime?
+  errorMessage String?     @db.Text
+  incident    Incident?    @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([type, format])
+  @@index([incidentId, createdAt])
+  @@index([generatedAt])
+  @@map("reports")
+}
+
+enum NotificationChannel {
+  EMAIL
+  WEBHOOK
+}
+
+enum NotificationEvent {
+  INCIDENT_CREATED
+  INCIDENT_CORRELATED
+  INCIDENT_RECOVERY_DETECTED
+  INCIDENT_RESOLVED
+  INCIDENT_CLOSED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum SlaScope {
+  GLOBAL
+  OLT
+  PON
+  CUSTOMER
+}
+
+model NotificationRule {
+  id              String              @id @default(uuid()) @db.Uuid
+  name            String              @unique @db.VarChar(120)
+  description     String?             @db.Text
+  enabled         Boolean             @default(false)
+  event           NotificationEvent
+  channel         NotificationChannel
+  minimumSeverity AlertSeverity       @default(MAJOR)
+  destination     String?             @db.VarChar(1000)
+  notifications   Notification[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([enabled, event, minimumSeverity])
+  @@map("notification_rules")
+}
+
+model Notification {
+  id               String              @id @default(uuid()) @db.Uuid
+  ruleId           String?             @db.Uuid
+  incidentId       String              @db.Uuid
+  channel          NotificationChannel
+  event            NotificationEvent
+  destination      String              @db.VarChar(1000)
+  status           NotificationStatus  @default(PENDING)
+  payload          Json
+  deliveryMetadata Json?
+  attempts         Int                 @default(0)
+  errorMessage     String?             @db.Text
+  sentAt           DateTime?
+  rule             NotificationRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  incident         Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([incidentId, createdAt])
+  @@index([status, createdAt])
+  @@index([ruleId])
+  @@map("notifications")
+}
+
+model SlaRecord {
+  id                     String    @id @default(uuid()) @db.Uuid
+  scope                  SlaScope
+  scopeKey               String    @default("GLOBAL") @db.VarChar(255)
+  periodStart            DateTime
+  periodEnd              DateTime
+  totalMinutes           Float
+  downtimeMinutes        Float
+  availabilityPercentage Float
+  incidentCount          Int
+  mttrMinutes            Float?
+  mtbfMinutes            Float?
+  calculatedAt           DateTime  @default(now())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([scope, scopeKey, periodStart, periodEnd])
+  @@index([scope, scopeKey, calculatedAt])
+  @@index([periodStart, periodEnd])
+  @@map("sla_records")
+}
+
+model IncidentEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  incidentId String   @db.Uuid
+  alertId    String   @unique @db.Uuid
+  eventType  String   @db.VarChar(100)
+  payload    Json
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  alert      Alert    @relation(fields: [alertId], references: [id], onDelete: Restrict)
+
+  @@index([incidentId, occurredAt])
+  @@map("incident_events")
+}
+
+model IncidentTimeline {
+  id          String   @id @default(uuid()) @db.Uuid
+  incidentId  String   @db.Uuid
+  eventType   String   @db.VarChar(100)
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  metadata    Json?
+  performedBy String?  @db.VarChar(150)
+  createdAt   DateTime @default(now())
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@map("incident_timelines")
+}
+
+enum CustomerConnectionStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+model IncidentCustomer {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  incidentId            String                   @db.Uuid
+  externalCustomerId    String                   @db.VarChar(150)
+  customerCode          String?                  @db.VarChar(150)
+  customerName          String?                  @db.VarChar(255)
+  onuSerial             String?                  @db.VarChar(150)
+  servicePlan           String?                  @db.VarChar(150)
+  serviceType           String?                  @db.VarChar(150)
+  initialStatus         CustomerConnectionStatus @default(UNKNOWN)
+  currentStatus         CustomerConnectionStatus @default(UNKNOWN)
+  rxPowerBefore         Float?
+  rxPowerDuring         Float?
+  rxPowerAfter          Float?
+  affectedFrom          DateTime?
+  restoredAt            DateTime?
+  impactDurationSeconds Int                      @default(0)
+  confirmedAffected     Boolean                  @default(false)
+  incident              Incident                 @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([incidentId, externalCustomerId])
+  @@index([customerCode])
+  @@index([onuSerial])
+  @@index([currentStatus])
+  @@index([incidentId, confirmedAffected])
+  @@map("incident_customers")
+}
