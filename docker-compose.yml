@@ -1,0 +1,80 @@
+services:
+  api_incident_report:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://incident_user:123456@postgres.db:5432/omniSentinel_db?schema=public
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://incident_user:incident_password@rabbitmq:5672
+      REPORT_STORAGE_PATH: /app/storage/reports
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./storage/reports:/app/storage/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: omniSentinel_db
+      POSTGRES_USER: incident_user
+      POSTGRES_PASSWORD: "123456"
+    hostname: postgres.db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - postgres.db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incident_user -d incident_report"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: incident_user
+      RABBITMQ_DEFAULT_PASS: incident_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    profiles: ["mail"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:
