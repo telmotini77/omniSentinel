@@ -35,6 +35,10 @@ export class AlertConsumerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (!this.configService.getOrThrow<boolean>('RABBITMQ_ENABLED')) {
+      this.logger.log('RabbitMQ alert consumer is disabled');
+      return;
+    }
     this.channel = await this.rabbitMq.createChannel();
     await this.rabbitMq.assertAlertTopology(this.channel);
     await this.channel.prefetch(20);

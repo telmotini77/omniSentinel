@@ -9,7 +9,7 @@ import {
   type ZasmaoltAdapter,
 } from '../integrations/zasmaolt/zasmaolt.adapter';
 
-type DependencyStatus = 'up' | 'down';
+type DependencyStatus = 'up' | 'down' | 'disabled';
 type HealthResult = {
   status: 'healthy' | 'degraded';
   services: {
@@ -35,7 +35,7 @@ export class HealthService {
     const checks = await Promise.all([
       this.checkDependency(() => this.prisma.$queryRaw`SELECT 1`),
       this.checkDependency(() => this.redis.ping()),
-      this.checkDependency(() => this.rabbitMq.assertInfrastructure()),
+      this.rabbitMqStatus(),
       this.checkDependency(() => this.zasmaolt.checkHealth()),
       this.checkDependency(() =>
         access(this.configService.getOrThrow<string>('REPORT_STORAGE_PATH')),
@@ -44,11 +44,18 @@ export class HealthService {
     const [database, redis, rabbitmq, apiZasmaolt, storage] = checks;
     const services = { database, redis, rabbitmq, apiZasmaolt, storage };
     return {
-      status: Object.values(services).every((service) => service === 'up')
+      status: Object.values(services).every((service) => service !== 'down')
         ? 'healthy'
         : 'degraded',
       services,
     };
+  }
+
+  private async rabbitMqStatus(): Promise<DependencyStatus> {
+    if (!this.configService.getOrThrow<boolean>('RABBITMQ_ENABLED')) {
+      return 'disabled';
+    }
+    return this.checkDependency(() => this.rabbitMq.assertInfrastructure());
   }
 
   private async checkDependency(

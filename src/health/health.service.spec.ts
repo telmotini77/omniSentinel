@@ -54,4 +54,45 @@ describe('HealthService', () => {
     });
     jest.restoreAllMocks();
   });
+
+  it('reports RabbitMQ as disabled without probing it when disabled by config', async () => {
+    const rabbitMq = {
+      assertInfrastructure: jest.fn().mockResolvedValue(undefined),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        HealthService,
+        {
+          provide: PrismaService,
+          useValue: {
+            $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: { ping: jest.fn().mockResolvedValue(undefined) },
+        },
+        { provide: RabbitMqService, useValue: rabbitMq },
+        {
+          provide: ConfigService,
+          useValue: {
+            getOrThrow: jest.fn((key: string) =>
+              key === 'RABBITMQ_ENABLED' ? false : '.',
+            ),
+          },
+        },
+        {
+          provide: ZASMAOLT_ADAPTER,
+          useValue: { checkHealth: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
+    }).compile();
+    const service = module.get(HealthService);
+
+    await expect(service.check()).resolves.toMatchObject({
+      status: 'healthy',
+      services: { rabbitmq: 'disabled' },
+    });
+    expect(rabbitMq.assertInfrastructure).not.toHaveBeenCalled();
+  });
 });

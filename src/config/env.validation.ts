@@ -24,9 +24,14 @@ export const environmentValidationSchema = Joi.object({
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .required(),
+  RABBITMQ_ENABLED: Joi.boolean().default(true),
   RABBITMQ_URL: Joi.string()
     .uri({ scheme: ['amqp', 'amqps'] })
-    .required(),
+    .when('RABBITMQ_ENABLED', {
+      is: true,
+      then: Joi.required(),
+      otherwise: Joi.string().allow('').optional(),
+    }),
   RABBITMQ_EVENTS_EXCHANGE: Joi.string().default('network.events'),
   RABBITMQ_HEALTH_QUEUE: Joi.string().default('api_incident_report.health'),
   ZASMAOLT_API_URL: Joi.string().uri().required(),
