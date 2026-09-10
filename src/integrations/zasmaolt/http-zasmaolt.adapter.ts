@@ -6,7 +6,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { CustomerConnectionStatus } from '@prisma/client';
 import { MetricsService } from '../../observability/metrics.service';
-import type { ExternalCustomer, ZasmaoltAdapter } from './zasmaolt.adapter';
+import type {
+  ExternalCustomer,
+  ExternalNap,
+  ExternalNapPage,
+  ExternalNapQuery,
+  ExternalNapStatus,
+  ZasmaoltAdapter,
+} from './zasmaolt.adapter';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -24,21 +31,15 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
     oltExternalId: string,
     ponIdentifier: string,
   ): Promise<ExternalCustomer[]> {
-    const ponsResponse = await this.request(
-      `/api/v1/olts/${encodeURIComponent(oltExternalId)}/pons`,
-    );
-    const pon = this.extractArray(ponsResponse).find((candidate) =>
-      this.matchesPon(candidate, ponIdentifier),
-    );
-    const ponId = this.readString(pon, 'id');
-    if (!ponId) {
+    const [board, pon] = ponIdentifier.split('/');
+    if (!this.isPortPart(board) || !this.isPortPart(pon)) {
       throw new ServiceUnavailableException({
-        error: 'PON_NOT_FOUND_UPSTREAM',
-        message: `The requested PON ${ponIdentifier} was not returned by api_zaSmaOlt`,
+        error: 'INVALID_PON_IDENTIFIER',
+        message: `PON identifier ${ponIdentifier} must use the board/port format`,
       });
     }
     const customersResponse = await this.request(
-      `/api/v1/pons/${encodeURIComponent(ponId)}/customers`,
+      `/integration/v1/impact/olts/${encodeURIComponent(oltExternalId)}/pons/${encodeURIComponent(board)}/${encodeURIComponent(pon)}/customers`,
     );
     return this.extractArray(customersResponse).map((customer) =>
       this.mapCustomer(customer),
@@ -46,7 +47,43 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
   }
 
   async checkHealth(): Promise<void> {
-    await this.request('', 'HEAD');
+    await this.request('/integration/v1/health');
+  }
+
+  async listNaps(query: ExternalNapQuery): Promise<ExternalNapPage> {
+    const parameters = new URLSearchParams();
+    if (query.page) parameters.set('page', String(query.page));
+    if (query.limit) parameters.set('limit', String(query.limit));
+    if (query.search) parameters.set('search', query.search);
+    if (query.oltId) parameters.set('oltId', query.oltId);
+    if (query.status) parameters.set('status', query.status);
+    const suffix = parameters.size ? `?${parameters.toString()}` : '';
+    const response = await this.request(
+      `/integration/v1/inventory/naps${suffix}`,
+    );
+    if (!this.isRecord(response)) {
+      throw new ServiceUnavailableException({
+        error: 'INVALID_UPSTREAM_INVENTORY',
+        message: 'api_zaSmaOlt returned an invalid inventory response',
+      });
+    }
+    const data = this.extractArray(response).map((nap) => this.mapNap(nap));
+    return {
+      data,
+      total: this.readPositiveInteger(response, 'total', data.length),
+      page: this.readPositiveInteger(response, 'page', query.page ?? 1),
+      limit: this.readPositiveInteger(
+        response,
+        'limit',
+        query.limit ?? data.length,
+      ),
+      source: 'SMARTOLT_CACHE',
+      cachedNaps:
+        this.readNonNegativeInteger(response, 'cachedNaps', data.length) ??
+        data.length,
+      refreshedAt: this.readString(response, 'refreshedAt') ?? null,
+      isStale: response.isStale === true,
+    };
   }
 
   private async request(path: string, method = 'GET'): Promise<unknown> {
@@ -131,13 +168,8 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
       : [];
   }
 
-  private matchesPon(pon: JsonRecord, identifier: string): boolean {
-    if (this.readString(pon, 'identifier') === identifier) return true;
-    const [board, port] = identifier.split('/');
-    return (
-      this.readString(pon, 'board') === board &&
-      (this.readString(pon, 'pon') ?? this.readString(pon, 'port')) === port
-    );
+  private isPortPart(value: string | undefined): value is string {
+    return Boolean(value && /^\d+$/.test(value));
   }
 
   private mapCustomer(customer: JsonRecord): ExternalCustomer {
@@ -169,6 +201,44 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
     };
   }
 
+  private mapNap(nap: JsonRecord): ExternalNap {
+    const id = this.readString(nap, 'id');
+    const name = this.readString(nap, 'name');
+    const oltId = this.readString(nap, 'oltId');
+    if (!id || !name || !oltId) {
+      throw new ServiceUnavailableException({
+        error: 'INVALID_UPSTREAM_INVENTORY',
+        message: 'api_zaSmaOlt returned a NAP without its required identity',
+      });
+    }
+    const status = this.readString(nap, 'status')?.toUpperCase();
+    const safeStatus: ExternalNapStatus = [
+      'ONLINE',
+      'PARTIAL',
+      'OFFLINE',
+    ].includes(status ?? '')
+      ? (status as ExternalNapStatus)
+      : 'UNKNOWN';
+    const latitude = this.readNumber(nap, 'latitude');
+    const longitude = this.readNumber(nap, 'longitude');
+    return {
+      id,
+      name,
+      oltId,
+      oltName: this.readString(nap, 'oltName') ?? oltId,
+      board: this.readNonNegativeInteger(nap, 'board'),
+      pon: this.readNonNegativeInteger(nap, 'pon'),
+      status: safeStatus,
+      totalClients: this.readNonNegativeInteger(nap, 'totalClients', 0) ?? 0,
+      onlineClients: this.readNonNegativeInteger(nap, 'onlineClients', 0) ?? 0,
+      offlineClients:
+        this.readNonNegativeInteger(nap, 'offlineClients', 0) ?? 0,
+      ...(latitude !== undefined && longitude !== undefined
+        ? { latitude, longitude }
+        : {}),
+    };
+  }
+
   private mapStatus(status: string | undefined): CustomerConnectionStatus {
     const normalized = status?.toUpperCase();
     if (['ONLINE', 'UP', 'ACTIVE', 'CONNECTED'].includes(normalized ?? ''))
@@ -197,6 +267,26 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
     return typeof value === 'number' && Number.isFinite(value)
       ? value
       : undefined;
+  }
+
+  private readNonNegativeInteger(
+    record: JsonRecord,
+    key: string,
+    fallback?: number,
+  ): number | undefined {
+    const value = record[key];
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0)
+      return fallback;
+    return value;
+  }
+
+  private readPositiveInteger(
+    record: JsonRecord,
+    key: string,
+    fallback: number,
+  ): number {
+    const value = this.readNonNegativeInteger(record, key);
+    return value && value > 0 ? value : fallback;
   }
 
   private isRecord(value: unknown): value is JsonRecord {

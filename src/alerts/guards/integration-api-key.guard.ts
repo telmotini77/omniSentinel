@@ -14,7 +14,9 @@ export class IntegrationApiKeyGuard implements CanActivate {
   constructor(private readonly configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const expectedKey = this.configService.get<string>('ZASMAOLT_API_KEY');
+    const expectedKey = this.configService.get<string>(
+      'ZASMAOLT_INGEST_API_KEY',
+    );
     if (!expectedKey) {
       throw new ServiceUnavailableException({
         error: 'INTEGRATION_NOT_CONFIGURED',

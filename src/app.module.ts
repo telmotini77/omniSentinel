@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth/auth.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { IncidentsModule } from './incidents/incidents.module';
+import { InventoryModule } from './inventory/inventory.module';
 import { ImpactModule } from './impact/impact.module';
 import { ZasmaoltModule } from './integrations/zasmaolt/zasmaolt.module';
 import { CacheModule } from './cache/cache.module';
@@ -59,6 +60,7 @@ import { UsersModule } from './users/users.module';
     CorrelationModule,
     AlertsModule,
     IncidentsModule,
+    InventoryModule,
     ImpactModule,
     ReportsModule,
     NotificationsModule,

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Panel operativo de OmniSentinel para la gestión de incidentes de red."
+    />
+    <title>OmniSentinel | Centro de operaciones</title>
+    <link rel="stylesheet" href="/dashboard/styles.css" />
+  </head>
+  <body>
+    <main id="login-view" class="login-shell">
+      <section class="login-intro" aria-labelledby="login-product-title">
+        <a class="brand brand--light" href="/dashboard/" aria-label="OmniSentinel, inicio">
+          <span class="brand-mark" aria-hidden="true">◉</span>
+          <span>Omni<span>Sentinel</span></span>
+        </a>
+        <div class="login-copy">
+          <p class="eyebrow">CENTRO DE OPERACIONES</p>
+          <h1 id="login-product-title">La red, clara y bajo control.</h1>
+          <p>
+            Consulta incidentes, impacto a clientes y disponibilidad desde un
+            único lugar.
+          </p>
+        </div>
+        <div class="login-features" aria-label="Funciones principales">
+          <span>● Incidentes en tiempo real</span>
+          <span>● Impacto y SLA</span>
+          <span>● Reportes descargables</span>
+        </div>
+      </section>
+
+      <section class="login-card-wrap" aria-labelledby="login-title">
+        <form id="login-form" class="login-card">
+          <p class="eyebrow">ACCESO SEGURO</p>
+          <h2 id="login-title">Bienvenido</h2>
+          <p class="muted">Ingresa con tu usuario o correo institucional.</p>
+          <label for="identity">Usuario o correo</label>
+          <input
+            id="identity"
+            name="identity"
+            type="text"
+            autocomplete="username"
+            required
+            autofocus
+            placeholder="ej. operador.noc"
+          />
+          <label for="password">Contraseña</label>
+          <div class="password-field">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              minlength="12"
+              placeholder="Tu contraseña"
+            />
+            <button id="toggle-password" class="icon-button" type="button" aria-label="Mostrar contraseña">◉</button>
+          </div>
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+          <button id="login-submit" class="button button--primary button--wide" type="submit">
+            <span>Entrar al panel</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <p class="login-help">¿No tienes acceso? Solicítalo al administrador de operaciones.</p>
+        </form>
+      </section>
+    </main>
+
+    <div id="app" class="app-shell" hidden>
+      <aside id="sidebar" class="sidebar" aria-label="Navegación principal">
+        <div class="sidebar-brand-row">
+          <a class="brand brand--light" href="/dashboard/" aria-label="OmniSentinel, inicio">
+            <span class="brand-mark" aria-hidden="true">◉</span>
+            <span>Omni<span>Sentinel</span></span>
+          </a>
+          <button id="close-menu" class="icon-button mobile-only" type="button" aria-label="Cerrar menú">×</button>
+        </div>
+        <p class="sidebar-label">OPERACIÓN</p>
+        <nav class="navigation">
+          <button class="nav-link is-active" type="button" data-view="overview">
+            <span aria-hidden="true">▦</span><span>Resumen</span>
+          </button>
+          <button class="nav-link" type="button" data-view="inventory">
+            <span aria-hidden="true">⌘</span><span>Inventario real</span>
+          </button>
+          <button class="nav-link" type="button" data-view="incidents">
+            <span aria-hidden="true">!</span><span>Incidentes</span>
+          </button>
+          <button class="nav-link" type="button" data-view="alerts">
+            <span aria-hidden="true">⌁</span><span>Alertas</span>
+          </button>
+          <button class="nav-link" type="button" data-view="reports">
+            <span aria-hidden="true">▤</span><span>Reportes</span>
+          </button>
+          <button class="nav-link" type="button" data-view="analytics">
+            <span aria-hidden="true">◒</span><span>Analítica y SLA</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <a href="/api/docs" target="_blank" rel="noreferrer">Abrir documentación API ↗</a>
+          <span id="connection-status" class="connection-status">● Conectando</span>
+        </div>
+      </aside>
+
+      <div id="menu-backdrop" class="menu-backdrop" hidden></div>
+      <section class="workspace">
+        <header class="topbar">
+          <button id="open-menu" class="icon-button mobile-only" type="button" aria-label="Abrir menú">☰</button>
+          <div class="breadcrumb"><span id="page-kicker">OPERACIÓN</span><strong id="page-title">Resumen</strong></div>
+          <div class="topbar-actions">
+            <button id="refresh-view" class="button button--secondary" type="button">↻ Actualizar</button>
+            <button id="user-menu" class="user-chip" type="button" aria-haspopup="true" aria-expanded="false">
+              <span id="user-initials" class="avatar">US</span>
+              <span class="user-copy"><strong id="user-name">Usuario</strong><small id="user-role">—</small></span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            <div id="user-popover" class="user-popover" hidden>
+              <p id="user-email" class="muted"></p>
+              <p id="user-permissions" class="permission-copy"></p>
+              <button id="logout" class="button button--danger button--wide" type="button">Cerrar sesión</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="content">
+          <section id="overview" class="view is-visible" aria-labelledby="overview-title">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">VISTA GENERAL</p>
+                <h1 id="overview-title">Estado de la operación</h1>
+                <p class="muted">Indicadores actuales de la red y los incidentes en seguimiento.</p>
+              </div>
+              <p id="overview-updated" class="updated-at">Actualizando…</p>
+            </div>
+            <div class="metric-grid" aria-live="polite">
+              <article class="metric-card"><span class="metric-icon metric-icon--blue">!</span><p>Incidentes activos</p><strong id="metric-active">—</strong><small>requieren seguimiento</small></article>
+              <article class="metric-card"><span class="metric-icon metric-icon--red">▲</span><p>Críticos</p><strong id="metric-critical">—</strong><small>prioridad inmediata</small></article>
+              <article class="metric-card"><span class="metric-icon metric-icon--amber">◉</span><p>Clientes afectados</p><strong id="metric-customers">—</strong><small>en incidentes activos</small></article>
+              <article class="metric-card"><span class="metric-icon metric-icon--purple">⌁</span><p>Disponibilidad</p><strong id="metric-availability">—</strong><small>últimos 30 días</small></article>
+            </div>
+            <div class="two-column">
+              <section class="panel" aria-labelledby="priority-incidents-title">
+                <div class="panel-head"><div><h2 id="priority-incidents-title">Prioridad operativa</h2><p>Incidentes críticos y mayores recientes.</p></div><button class="text-button" type="button" data-go="incidents">Ver todos</button></div>
+                <div id="priority-incidents" class="table-wrap"></div>
+              </section>
+              <section class="panel readiness-card" aria-labelledby="network-status-title">
+                <div class="panel-head"><div><h2 id="network-status-title">Resumen de red</h2><p>Actualizado desde la operación en curso.</p></div></div>
+                <dl class="readiness-list">
+                  <div><dt>ONU offline</dt><dd id="metric-onus">—</dd></div>
+                  <div><dt>Resueltos hoy</dt><dd id="metric-resolved">—</dd></div>
+                  <div><dt>MTTR promedio</dt><dd id="metric-mttr">—</dd></div>
+                </dl>
+                <div class="help-callout"><span aria-hidden="true">i</span><p>Selecciona un incidente para revisar su línea de tiempo, eventos y clientes afectados.</p></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="inventory" class="view" aria-labelledby="inventory-title">
+            <div class="page-heading">
+              <div><p class="eyebrow">API_ZASMAOLT</p><h1 id="inventory-title">Inventario real de NAPs</h1><p class="muted">Datos operativos leídos desde la caché autenticada de Smart OLT en api_zaSmaOlt.</p></div>
+              <span id="inventory-total" class="result-count"></span>
+            </div>
+            <form id="inventory-filters" class="filter-bar">
+              <label>Buscar<input name="search" type="search" placeholder="NAP u OLT" /></label>
+              <label>Estado<select name="status"><option value="">Todos los estados</option><option>ONLINE</option><option>PARTIAL</option><option>OFFLINE</option><option>UNKNOWN</option></select></label>
+              <label>OLT<input name="oltId" type="search" placeholder="Identificador de OLT" /></label>
+              <button class="button button--primary" type="submit">Consultar API</button>
+              <button id="clear-inventory-filters" class="button button--ghost" type="button">Limpiar</button>
+            </form>
+            <p id="inventory-source" class="updated-at">Consultando api_zaSmaOlt…</p>
+            <section class="panel"><div id="inventory-table" class="table-wrap"></div></section>
+          </section>
+
+          <section id="incidents" class="view" aria-labelledby="incidents-title">
+            <div class="page-heading">
+              <div><p class="eyebrow">SEGUIMIENTO</p><h1 id="incidents-title">Incidentes</h1><p class="muted">Filtra y abre un incidente para consultar su contexto completo.</p></div>
+              <span id="incidents-total" class="result-count"></span>
+            </div>
+            <form id="incident-filters" class="filter-bar">
+              <label>Estado<select name="status"><option value="">Todos los estados</option><option>DETECTED</option><option>INVESTIGATING</option><option>CONFIRMED</option><option>IN_PROGRESS</option><option>MONITORING</option><option>RESOLVED</option><option>CLOSED</option><option>FALSE_POSITIVE</option></select></label>
+              <label>Severidad<select name="severity"><option value="">Todas las severidades</option><option>DISASTER</option><option>CRITICAL</option><option>MAJOR</option><option>MINOR</option><option>WARNING</option><option>INFO</option></select></label>
+              <label>OLT<input name="oltExternalId" type="search" placeholder="ej. OLT-CUE-01" /></label>
+              <label>Buscar<input name="localSearch" type="search" placeholder="Código o título" /></label>
+              <button class="button button--primary" type="submit">Aplicar filtros</button>
+              <button id="clear-incident-filters" class="button button--ghost" type="button">Limpiar</button>
+            </form>
+            <section class="panel"><div id="incidents-table" class="table-wrap"></div></section>
+          </section>
+
+          <section id="alerts" class="view" aria-labelledby="alerts-title">
+            <div class="page-heading"><div><p class="eyebrow">ENTRADA DE RED</p><h1 id="alerts-title">Alertas</h1><p class="muted">Eventos recibidos y procesados por OmniSentinel.</p></div><span id="alerts-total" class="result-count"></span></div>
+            <form id="alert-filters" class="filter-bar">
+              <label>Severidad<select name="severity"><option value="">Todas las severidades</option><option>DISASTER</option><option>CRITICAL</option><option>MAJOR</option><option>MINOR</option><option>WARNING</option><option>INFO</option></select></label>
+              <label>Origen<select name="source"><option value="">Todos los orígenes</option><option>API_ZASMAOLT</option></select></label>
+              <label>OLT<input name="oltExternalId" type="search" placeholder="ej. OLT-CUE-01" /></label>
+              <button class="button button--primary" type="submit">Aplicar filtros</button>
+              <button id="clear-alert-filters" class="button button--ghost" type="button">Limpiar</button>
+            </form>
+            <section class="panel"><div id="alerts-table" class="table-wrap"></div></section>
+          </section>
+
+          <section id="reports" class="view" aria-labelledby="reports-title">
+            <div class="page-heading"><div><p class="eyebrow">DOCUMENTACIÓN</p><h1 id="reports-title">Reportes</h1><p class="muted">Consulta, descarga o genera reportes de la operación.</p></div></div>
+            <section id="report-generator" class="panel report-generator" hidden>
+              <div class="panel-head"><div><h2>Generar reporte</h2><p>El archivo quedará disponible en la tabla al terminar.</p></div></div>
+              <form id="report-form" class="report-form">
+                <label>Tipo<select name="type"><option value="DAILY_REPORT">Reporte diario</option><option value="WEEKLY_REPORT">Reporte semanal</option><option value="MONTHLY_REPORT">Reporte mensual</option><option value="SLA_REPORT">Reporte de SLA</option><option value="AVAILABILITY_REPORT">Reporte de disponibilidad</option><option value="OUTAGE_REPORT">Reporte de interrupciones</option><option value="INCIDENT_REPORT">Reporte de incidente</option></select></label>
+                <label>Formato<select name="format"><option value="PDF">PDF</option><option value="XLSX">Excel (XLSX)</option><option value="CSV">CSV</option><option value="JSON">JSON</option></select></label>
+                <label>Desde<input name="startDate" type="date" /></label>
+                <label>Hasta<input name="endDate" type="date" /></label>
+                <label class="field-wide">Título opcional<input name="title" type="text" maxlength="255" placeholder="Ej. Operación semanal Quito" /></label>
+                <button class="button button--primary" type="submit">Generar reporte</button>
+              </form>
+            </section>
+            <section class="panel"><div id="reports-table" class="table-wrap"></div></section>
+          </section>
+
+          <section id="analytics" class="view" aria-labelledby="analytics-title">
+            <div class="page-heading"><div><p class="eyebrow">CALIDAD DE SERVICIO</p><h1 id="analytics-title">Analítica y SLA</h1><p class="muted">Tendencias de los últimos 30 días.</p></div></div>
+            <div class="metric-grid metric-grid--three">
+              <article class="metric-card"><p>Incidentes del período</p><strong id="analytics-incidents">—</strong><small id="analytics-resolved">—</small></article>
+              <article class="metric-card"><p>Clientes únicos afectados</p><strong id="analytics-customers">—</strong><small id="analytics-offline">—</small></article>
+              <article class="metric-card"><p>Disponibilidad SLA</p><strong id="analytics-availability">—</strong><small id="analytics-downtime">—</small></article>
+            </div>
+            <div class="two-column">
+              <section class="panel"><div class="panel-head"><div><h2>Incidentes por severidad</h2><p>Distribución del período seleccionado.</p></div></div><div id="severity-bars" class="bar-list"></div></section>
+              <section class="panel"><div class="panel-head"><div><h2>OLT con más incidentes</h2><p>Priorización por localización.</p></div></div><div id="top-olts" class="simple-list"></div></section>
+            </div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <dialog id="incident-dialog" class="incident-dialog" aria-labelledby="incident-dialog-title">
+      <div class="dialog-head"><div><p id="incident-dialog-code" class="eyebrow">INCIDENTE</p><h2 id="incident-dialog-title">Detalle del incidente</h2></div><button id="close-dialog" class="icon-button" type="button" aria-label="Cerrar detalle">×</button></div>
+      <div id="incident-detail" class="dialog-content"></div>
+      <div id="incident-actions" class="dialog-actions"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/dashboard/app.js" defer></script>
+  </body>
+</html>

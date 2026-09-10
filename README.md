@@ -80,6 +80,7 @@ Los módulos de alertas, incidentes, correlación, impacto, reportes, SLA y noti
 
 - Pruebas unitarias para SLA, notificaciones, adaptadores y observabilidad; prueba E2E contra PostgreSQL, Redis y RabbitMQ que confirma salud, métricas y protección JWT de las estadísticas.
 - Métricas Prometheus en `GET /metrics`: métricas estándar de proceso más `alerts_received_total`, `incidents_created_total`, `incidents_resolved_total`, `reports_generated_total`, `affected_customers_total`, `failed_events_total` y los histogramas de duración de eventos, reportes y llamadas a `api_zaSmaOlt`.
+- Dashboard web responsive en `GET /dashboard/`: inicio de sesión, resumen operativo, incidentes, alertas, impacto, reportes y analítica. Respeta los permisos existentes de cada usuario.
 - El endpoint de métricas queda fuera del prefijo `/api/v1` para facilitar el scraping. En producción se desactiva si `METRICS_ENABLED` no se define; al activarlo requiere un bearer token de al menos 32 caracteres.
 - Endurecimiento operativo: CORS explícito sin comodines, lista de métodos/encabezados permitidos, `Helmet`, Swagger deshabilitado por defecto en producción y soporte de `TRUST_PROXY` para un proxy inverso confiable.
 - Actualización de seguridad para la dependencia transitiva `multer` a `2.3.0` mediante una anulación explícita y limpieza segura de conexiones Redis no inicializadas al apagar la aplicación.
@@ -97,6 +98,8 @@ Los módulos de alertas, incidentes, correlación, impacto, reportes, SLA y noti
 5. Cargue los roles, permisos y administrador inicial: `npm run prisma:seed`.
 6. Inicie la API: `npm run start:dev`.
 
+Abra el dashboard de operación en `http://localhost:3000/dashboard/`. Un usuario con rol `VIEWER` puede consultar incidentes, alertas, reportes y métricas operativas; los roles con permisos adicionales verán acciones como reconocer incidentes, actualizar su estado, resolverlos o generar reportes.
+
 Para ejecutar el conjunto completo en contenedores: `docker compose up -d --build`. RabbitMQ Management queda en `http://localhost:15672` (credenciales de desarrollo: `incident_user` / `incident_password`). MailHog se habilita con `docker compose --profile mail up -d`.
 
 ## Verificación
@@ -109,9 +112,11 @@ Revise `.env.example`. La configuración para ejecutar la API desde el host apun
 
 `ADMIN_EMAIL`, `ADMIN_USERNAME` y `ADMIN_PASSWORD` se usan una vez para crear el administrador inicial durante el seed. Cambie la contraseña de desarrollo antes de una instalación real.
 
-`ZASMAOLT_API_KEY` es la clave compartida temporal que `api_zaSmaOlt` debe enviar en `x-integration-api-key` al usar la ingestión HTTP. Rote el valor de desarrollo y guárdelo en un gestor de secretos antes de producción.
+`ZASMAOLT_INGEST_API_KEY` es la clave que `api_zaSmaOlt` debe enviar en `x-integration-api-key` al usar la ingestión HTTP. `ZASMAOLT_API_KEY` es distinta: permite a OmniSentinel consultar la API protegida de `api_zaSmaOlt` para obtener el impacto real de una OLT/PON. Rote ambos valores de desarrollo y guárdelos en un gestor de secretos antes de producción.
 
-Para desarrollo mantenga `ZASMAOLT_ADAPTER_MODE=mock`. Cuando exista `api_zaSmaOlt`, cambie a `http` y configure `ZASMAOLT_API_URL`, `ZASMAOLT_API_KEY`, `ZASMAOLT_API_KEY_HEADER`, el timeout y el circuit breaker según el contrato real de esa API.
+OmniSentinel acepta únicamente eventos cuyo `source` sea `API_ZASMAOLT`. Zabbix y Smart OLT deben comunicarse primero con `api_zaSmaOlt`; la API rechaza entradas directas con `source=ZABBIX` o `source=SMARTOLT`, tanto por HTTP como por RabbitMQ. El modo predeterminado es `ZASMAOLT_ADAPTER_MODE=http`, para que el impacto se consulte en esa API real. `mock` queda reservado para pruebas automatizadas, nunca para un despliegue operativo.
+
+El dashboard incluye **Inventario real**, que consulta `GET /api/v1/inventory/naps` y obtiene los resúmenes de NAP, OLT/PON y estado desde `api_zaSmaOlt`. La respuesta procede de la caché persistida de Smart OLT y no guarda una segunda copia en OmniSentinel ni incluye datos personales de clientes. La actualización del inventario depende de que `api_zaSmaOlt` pueda alcanzar Smart OLT.
 
 Las reglas de correlación y severidad se crean con valores iniciales durante la migración. Se modifican en Swagger con una cuenta que tenga el permiso `configuration.update`; esos cambios se conservan en PostgreSQL.
 

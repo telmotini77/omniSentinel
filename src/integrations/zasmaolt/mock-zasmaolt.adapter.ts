@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { CustomerConnectionStatus } from '@prisma/client';
-import type { ExternalCustomer, ZasmaoltAdapter } from './zasmaolt.adapter';
+import type {
+  ExternalCustomer,
+  ExternalNapPage,
+  ExternalNapQuery,
+  ZasmaoltAdapter,
+} from './zasmaolt.adapter';
 
 @Injectable()
 export class MockZasmaoltAdapter implements ZasmaoltAdapter {
@@ -32,5 +37,18 @@ export class MockZasmaoltAdapter implements ZasmaoltAdapter {
 
   async checkHealth(): Promise<void> {
     return Promise.resolve();
+  }
+
+  listNaps(query: ExternalNapQuery): Promise<ExternalNapPage> {
+    return Promise.resolve({
+      data: [],
+      total: 0,
+      page: query.page ?? 1,
+      limit: query.limit ?? 50,
+      source: 'SMARTOLT_CACHE',
+      cachedNaps: 0,
+      refreshedAt: null,
+      isStale: false,
+    });
   }
 }

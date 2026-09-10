@@ -29,8 +29,16 @@ export class NormalizedNetworkEventDto {
   @IsEnum(AlertSeverity)
   severity!: AlertSeverity;
 
-  @ApiProperty({ enum: AlertSource, example: AlertSource.ZABBIX })
-  @IsEnum(AlertSource)
+  @ApiProperty({
+    enum: [AlertSource.API_ZASMAOLT],
+    example: AlertSource.API_ZASMAOLT,
+    description:
+      'Only api_zaSmaOlt may publish events into OmniSentinel. Zabbix and Smart OLT remain behind that service.',
+  })
+  @IsIn([AlertSource.API_ZASMAOLT], {
+    message:
+      'source must be API_ZASMAOLT; direct Zabbix and Smart OLT ingestion is disabled',
+  })
   source!: AlertSource;
 
   @ApiProperty({ example: '2026-09-09T09:32:00-05:00' })

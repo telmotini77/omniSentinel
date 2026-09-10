@@ -31,7 +31,8 @@ export const environmentValidationSchema = Joi.object({
   RABBITMQ_HEALTH_QUEUE: Joi.string().default('api_incident_report.health'),
   ZASMAOLT_API_URL: Joi.string().uri().required(),
   ZASMAOLT_API_KEY: Joi.string().min(24).required(),
-  ZASMAOLT_ADAPTER_MODE: Joi.string().valid('mock', 'http').default('mock'),
+  ZASMAOLT_INGEST_API_KEY: Joi.string().min(24).required(),
+  ZASMAOLT_ADAPTER_MODE: Joi.string().valid('mock', 'http').default('http'),
   ZASMAOLT_API_KEY_HEADER: Joi.string().default('x-api-key'),
   ZASMAOLT_TIMEOUT_MS: Joi.number().integer().min(500).default(5_000),
   ZASMAOLT_CIRCUIT_BREAKER_FAILURE_THRESHOLD: Joi.number()
