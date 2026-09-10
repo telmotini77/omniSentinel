@@ -112,6 +112,10 @@
           <button id="open-menu" class="icon-button mobile-only" type="button" aria-label="Abrir menú">☰</button>
           <div class="breadcrumb"><span id="page-kicker">OPERACIÓN</span><strong id="page-title">Resumen</strong></div>
           <div class="topbar-actions">
+            <span id="live-status" class="live-status" role="status" aria-live="polite">Actualización manual</span>
+            <button id="auto-refresh" class="button button--secondary auto-refresh" type="button" aria-pressed="false" title="Activar actualización automática cada 30 segundos">
+              <span aria-hidden="true">◷</span><span id="auto-refresh-label">Auto: pausada</span>
+            </button>
             <button id="refresh-view" class="button button--secondary" type="button">↻ Actualizar</button>
             <button id="user-menu" class="user-chip" type="button" aria-haspopup="true" aria-expanded="false">
               <span id="user-initials" class="avatar">US</span>
@@ -142,6 +146,23 @@
               <article class="metric-card"><span class="metric-icon metric-icon--amber">◉</span><p>Clientes afectados</p><strong id="metric-customers">—</strong><small>en incidentes activos</small></article>
               <article class="metric-card"><span class="metric-icon metric-icon--purple">⌁</span><p>Disponibilidad</p><strong id="metric-availability">—</strong><small>últimos 30 días</small></article>
             </div>
+            <section class="quick-actions" aria-label="Accesos rápidos">
+              <button class="quick-action" type="button" data-go="incidents">
+                <span class="quick-action-icon quick-action-icon--red" aria-hidden="true">!</span>
+                <span><strong>Atender incidentes</strong><small>Revisa los que siguen activos</small></span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <button class="quick-action" type="button" data-go="alerts">
+                <span class="quick-action-icon quick-action-icon--blue" aria-hidden="true">⌁</span>
+                <span><strong>Ver alertas entrantes</strong><small>Confirma que los eventos estén llegando</small></span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <button class="quick-action" type="button" data-go="inventory">
+                <span class="quick-action-icon quick-action-icon--green" aria-hidden="true">⌘</span>
+                <span><strong>Consultar inventario</strong><small>Busca una NAP u OLT real</small></span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </section>
             <div class="two-column">
               <section class="panel" aria-labelledby="priority-incidents-title">
                 <div class="panel-head"><div><h2 id="priority-incidents-title">Prioridad operativa</h2><p>Incidentes críticos y mayores recientes.</p></div><button class="text-button" type="button" data-go="incidents">Ver todos</button></div>
@@ -171,8 +192,9 @@
               <button class="button button--primary" type="submit">Consultar API</button>
               <button id="clear-inventory-filters" class="button button--ghost" type="button">Limpiar</button>
             </form>
+            <div id="inventory-filter-summary" class="filter-summary" aria-live="polite"></div>
             <p id="inventory-source" class="updated-at">Consultando api_zaSmaOlt…</p>
-            <section class="panel"><div id="inventory-table" class="table-wrap"></div></section>
+            <section class="panel"><div id="inventory-table" class="table-wrap"></div><nav id="inventory-pagination" class="pagination" aria-label="Paginación del inventario"></nav></section>
           </section>
 
           <section id="incidents" class="view" aria-labelledby="incidents-title">
@@ -188,19 +210,22 @@
               <button class="button button--primary" type="submit">Aplicar filtros</button>
               <button id="clear-incident-filters" class="button button--ghost" type="button">Limpiar</button>
             </form>
-            <section class="panel"><div id="incidents-table" class="table-wrap"></div></section>
+            <div id="incident-filter-summary" class="filter-summary" aria-live="polite"></div>
+            <section class="panel"><div id="incidents-table" class="table-wrap"></div><nav id="incidents-pagination" class="pagination" aria-label="Paginación de incidentes"></nav></section>
           </section>
 
           <section id="alerts" class="view" aria-labelledby="alerts-title">
             <div class="page-heading"><div><p class="eyebrow">ENTRADA DE RED</p><h1 id="alerts-title">Alertas</h1><p class="muted">Eventos recibidos y procesados por OmniSentinel.</p></div><span id="alerts-total" class="result-count"></span></div>
             <form id="alert-filters" class="filter-bar">
               <label>Severidad<select name="severity"><option value="">Todas las severidades</option><option>DISASTER</option><option>CRITICAL</option><option>MAJOR</option><option>MINOR</option><option>WARNING</option><option>INFO</option></select></label>
+              <label>Estado<select name="status"><option value="">Todos los estados</option><option>NEW</option><option>PROCESSING</option><option>CORRELATED</option><option>IGNORED</option><option>RESOLVED</option><option>ERROR</option></select></label>
               <label>Origen<select name="source"><option value="">Todos los orígenes</option><option>API_ZASMAOLT</option></select></label>
               <label>OLT<input name="oltExternalId" type="search" placeholder="ej. OLT-CUE-01" /></label>
               <button class="button button--primary" type="submit">Aplicar filtros</button>
               <button id="clear-alert-filters" class="button button--ghost" type="button">Limpiar</button>
             </form>
-            <section class="panel"><div id="alerts-table" class="table-wrap"></div></section>
+            <div id="alert-filter-summary" class="filter-summary" aria-live="polite"></div>
+            <section class="panel"><div id="alerts-table" class="table-wrap"></div><nav id="alerts-pagination" class="pagination" aria-label="Paginación de alertas"></nav></section>
           </section>
 
           <section id="reports" class="view" aria-labelledby="reports-title">

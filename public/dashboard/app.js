@@ -4,12 +4,19 @@
   const API = '/api/v1';
   const TOKEN_KEY = 'omniSentinel.accessToken';
   const REFRESH_KEY = 'omniSentinel.refreshToken';
+  const AUTO_REFRESH_KEY = 'omniSentinel.dashboard.autoRefresh';
+  const AUTO_REFRESH_INTERVAL_MS = 30_000;
+  const LIVE_VIEWS = new Set(['overview', 'incidents', 'alerts']);
   const state = {
     accessToken: sessionStorage.getItem(TOKEN_KEY),
     refreshToken: sessionStorage.getItem(REFRESH_KEY),
     user: null,
     currentView: 'overview',
     incidents: [],
+    pagination: { inventory: 1, incidents: 1, alerts: 1 },
+    loadingViews: new Set(),
+    autoRefresh: sessionStorage.getItem(AUTO_REFRESH_KEY) === 'true',
+    autoRefreshTimer: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -24,6 +31,8 @@
     userMenu: byId('user-menu'), toast: byId('toast'), dialog: byId('incident-dialog'),
     dialogTitle: byId('incident-dialog-title'), dialogCode: byId('incident-dialog-code'),
     incidentDetail: byId('incident-detail'), incidentActions: byId('incident-actions'),
+    refreshView: byId('refresh-view'), autoRefresh: byId('auto-refresh'),
+    autoRefreshLabel: byId('auto-refresh-label'), liveStatus: byId('live-status'),
   };
 
   class ApiError extends Error {
@@ -140,6 +149,8 @@
     elements.app.hidden = true;
     elements.loginView.hidden = false;
     elements.loginForm.reset();
+    window.clearInterval(state.autoRefreshTimer);
+    state.autoRefreshTimer = null;
     closeMenu();
     if (expired) showToast('Tu sesión terminó. Vuelve a ingresar para continuar.', true);
   }
@@ -167,6 +178,7 @@
     elements.loginView.hidden = true;
     elements.app.hidden = false;
     displayUser();
+    scheduleAutoRefresh();
     navigate('overview');
   }
 
@@ -230,26 +242,170 @@
 
   function setMetric(id, value) { byId(id).textContent = text(value); }
 
-  async function loadOverview() {
-    setConnection('Cargando');
+  function setViewLoading(view, busy) {
+    const section = byId(view);
+    if (!section) return;
+    section.classList.toggle('is-loading', busy);
+    section.setAttribute('aria-busy', String(busy));
+    if (view === state.currentView) elements.refreshView.disabled = busy;
+  }
+
+  async function whileLoading(view, task) {
+    if (state.loadingViews.has(view)) return;
+    state.loadingViews.add(view);
+    setViewLoading(view, true);
     try {
-      const [summary, incidents] = await Promise.all([
-        api('/dashboard/summary'), api('/incidents?limit=6'),
-      ]);
-      setMetric('metric-active', number(summary.activeIncidents));
-      setMetric('metric-critical', number(summary.criticalIncidents));
-      setMetric('metric-customers', number(summary.affectedCustomers));
-      setMetric('metric-availability', `${Number(summary.availability || 0).toFixed(2)}%`);
-      setMetric('metric-onus', number(summary.offlineOnus));
-      setMetric('metric-resolved', number(summary.resolvedToday));
-      setMetric('metric-mttr', minutes(summary.averageMttr));
-      byId('overview-updated').textContent = `Actualizado ${date(new Date())}`;
-      const priority = incidents.data
-        .filter((item) => ['DISASTER', 'CRITICAL', 'MAJOR'].includes(item.severity))
-        .slice(0, 5);
-      table(byId('priority-incidents'), ['Incidente', 'Severidad', 'Estado', 'OLT', ''], priority.map((item) => incidentRow(item, true)), 'No hay incidentes prioritarios');
-      setConnection('En línea');
-    } catch (error) { showViewError(error, 'No fue posible cargar el resumen.'); }
+      return await task();
+    } finally {
+      state.loadingViews.delete(view);
+      setViewLoading(view, false);
+      if (view === state.currentView) updateAutoRefreshControl();
+    }
+  }
+
+  function setLiveStatus(label) {
+    elements.liveStatus.textContent = label;
+  }
+
+  function updateAutoRefreshControl() {
+    const enabled = state.autoRefresh;
+    elements.autoRefresh.classList.toggle('is-active', enabled);
+    elements.autoRefresh.setAttribute('aria-pressed', String(enabled));
+    elements.autoRefresh.title = enabled
+      ? 'Pausar actualización automática'
+      : 'Activar actualización automática cada 30 segundos';
+    elements.autoRefreshLabel.textContent = enabled ? 'Auto: cada 30 s' : 'Auto: pausada';
+    if (!state.loadingViews.has(state.currentView)) {
+      setLiveStatus(enabled ? 'Actualización automática activa' : 'Actualización manual');
+    }
+  }
+
+  function scheduleAutoRefresh() {
+    window.clearInterval(state.autoRefreshTimer);
+    state.autoRefreshTimer = null;
+    if (!state.autoRefresh) return;
+    state.autoRefreshTimer = window.setInterval(() => {
+      if (document.hidden || elements.dialog.open || !LIVE_VIEWS.has(state.currentView)) return;
+      refreshCurrentView();
+    }, AUTO_REFRESH_INTERVAL_MS);
+  }
+
+  function setAutoRefresh(enabled) {
+    state.autoRefresh = enabled;
+    sessionStorage.setItem(AUTO_REFRESH_KEY, String(enabled));
+    updateAutoRefreshControl();
+    scheduleAutoRefresh();
+    showToast(enabled
+      ? 'Actualización automática activada cada 30 segundos.'
+      : 'Actualización automática pausada.');
+  }
+
+  function refreshCurrentView() {
+    if (state.loadingViews.has(state.currentView)) return;
+    const loaders = {
+      overview: loadOverview, inventory: loadInventory, incidents: loadIncidents,
+      alerts: loadAlerts, reports: loadReports, analytics: loadAnalytics,
+    };
+    loaders[state.currentView]?.();
+  }
+
+  function renderPagination(containerId, view, result) {
+    const container = byId(containerId);
+    clear(container);
+    const total = Number(result.total || 0);
+    const page = Number(result.page || 1);
+    const limit = Number(result.limit || 1);
+    const pages = Math.max(1, Math.ceil(total / limit));
+    if (!total || pages === 1) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    const start = (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+    container.append(create('span', 'pagination-copy', `${number(start)}–${number(end)} de ${number(total)}`));
+    const previous = create('button', 'button button--secondary pagination-button', '← Anterior');
+    previous.type = 'button';
+    previous.disabled = page <= 1;
+    previous.addEventListener('click', () => {
+      state.pagination[view] = page - 1;
+      refreshCurrentView();
+    });
+    const next = create('button', 'button button--secondary pagination-button', 'Siguiente →');
+    next.type = 'button';
+    next.disabled = page >= pages;
+    next.addEventListener('click', () => {
+      state.pagination[view] = page + 1;
+      refreshCurrentView();
+    });
+    container.append(previous, create('span', 'pagination-page', `Página ${page} de ${pages}`), next);
+  }
+
+  const filterLabels = {
+    search: 'Buscar', status: 'Estado', oltId: 'OLT', oltExternalId: 'OLT',
+    severity: 'Severidad', source: 'Origen', localSearch: 'Buscar',
+  };
+
+  function filterValue(value) {
+    return String(value).replaceAll('_', ' ');
+  }
+
+  function renderFilterSummary(formId, summaryId, view) {
+    const form = byId(formId);
+    const container = byId(summaryId);
+    clear(container);
+    const activeFilters = [...new FormData(form).entries()].filter(([, value]) => String(value).trim());
+    if (!activeFilters.length) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    container.append(create('span', 'filter-summary-label', 'Filtros activos:'));
+    activeFilters.forEach(([name, value]) => {
+      const chip = create('button', 'filter-chip', `${filterLabels[name] || name}: ${filterValue(value)} ×`);
+      chip.type = 'button';
+      chip.title = `Quitar filtro ${filterLabels[name] || name}`;
+      chip.addEventListener('click', () => {
+        const field = form.elements.namedItem(name);
+        if (field) field.value = '';
+        state.pagination[view] = 1;
+        refreshCurrentView();
+      });
+      container.append(chip);
+    });
+    const clearAll = create('button', 'text-button filter-clear', 'Quitar todos');
+    clearAll.type = 'button';
+    clearAll.addEventListener('click', () => {
+      form.reset();
+      state.pagination[view] = 1;
+      refreshCurrentView();
+    });
+    container.append(clearAll);
+  }
+
+  async function loadOverview() {
+    return whileLoading('overview', async () => {
+      setConnection('Cargando');
+      setLiveStatus('Actualizando resumen…');
+      try {
+        const [summary, incidents] = await Promise.all([
+          api('/dashboard/summary'), api('/incidents?limit=6'),
+        ]);
+        setMetric('metric-active', number(summary.activeIncidents));
+        setMetric('metric-critical', number(summary.criticalIncidents));
+        setMetric('metric-customers', number(summary.affectedCustomers));
+        setMetric('metric-availability', `${Number(summary.availability || 0).toFixed(2)}%`);
+        setMetric('metric-onus', number(summary.offlineOnus));
+        setMetric('metric-resolved', number(summary.resolvedToday));
+        setMetric('metric-mttr', minutes(summary.averageMttr));
+        byId('overview-updated').textContent = `Actualizado ${date(new Date())}`;
+        const priority = incidents.data
+          .filter((item) => ['DISASTER', 'CRITICAL', 'MAJOR'].includes(item.severity))
+          .slice(0, 5);
+        table(byId('priority-incidents'), ['Incidente', 'Severidad', 'Estado', 'OLT', ''], priority.map((item) => incidentRow(item, true)), 'No hay incidentes prioritarios');
+        setConnection('En línea');
+      } catch (error) { showViewError(error, 'No fue posible cargar el resumen.'); }
+    });
   }
 
   function queryFromForm(form, ignored = []) {
@@ -261,16 +417,23 @@
   }
 
   async function loadIncidents() {
-    const form = byId('incident-filters');
-    const params = queryFromForm(form, ['localSearch']);
-    params.set('limit', '50');
-    try {
-      const result = await api(`/incidents?${params}`);
-      const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
-      state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
-      byId('incidents-total').textContent = `${number(result.total)} encontrados`;
-      table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
-    } catch (error) { showViewError(error, 'No fue posible cargar los incidentes.'); }
+    return whileLoading('incidents', async () => {
+      const form = byId('incident-filters');
+      const params = queryFromForm(form, ['localSearch']);
+      params.set('page', String(state.pagination.incidents));
+      params.set('limit', '25');
+      setLiveStatus('Actualizando incidentes…');
+      try {
+        const result = await api(`/incidents?${params}`);
+        const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
+        state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
+        byId('incidents-total').textContent = `${number(result.total)} encontrados`;
+        table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
+        renderFilterSummary('incident-filters', 'incident-filter-summary', 'incidents');
+        renderPagination('incidents-pagination', 'incidents', result);
+        setConnection('En línea');
+      } catch (error) { showViewError(error, 'No fue posible cargar los incidentes.'); }
+    });
   }
 
   function inventoryRow(nap) {
@@ -291,24 +454,30 @@
   }
 
   async function loadInventory() {
-    const params = queryFromForm(byId('inventory-filters'));
-    params.set('limit', '100');
-    try {
-      const result = await api(`/inventory/naps?${params}`);
-      byId('inventory-total').textContent = `${number(result.total)} NAPs`;
-      const inventorySource = byId('inventory-source');
-      inventorySource.className = result.isStale ? 'form-error' : 'updated-at';
-      inventorySource.textContent = result.isStale
-        ? `Fuente: api_zaSmaOlt · se muestran ${number(result.cachedNaps)} NAPs reales de la última caché persistida; Smart OLT aún no ha podido actualizarla.`
-        : `Fuente: api_zaSmaOlt · ${number(result.cachedNaps)} NAPs disponibles${result.refreshedAt ? ` · actualizado ${date(result.refreshedAt)}` : ''}`;
-      table(
-        byId('inventory-table'),
-        ['NAP', 'OLT', 'PON', 'Estado', 'Clientes', 'Conexión'],
-        result.data.map(inventoryRow),
-        'No hay NAPs que coincidan con los filtros.',
-      );
-      setConnection('En línea');
-    } catch (error) { showViewError(error, 'No fue posible consultar api_zaSmaOlt.'); }
+    return whileLoading('inventory', async () => {
+      const params = queryFromForm(byId('inventory-filters'));
+      params.set('page', String(state.pagination.inventory));
+      params.set('limit', '50');
+      setLiveStatus('Consultando inventario real…');
+      try {
+        const result = await api(`/inventory/naps?${params}`);
+        byId('inventory-total').textContent = `${number(result.total)} NAPs`;
+        const inventorySource = byId('inventory-source');
+        inventorySource.className = result.isStale ? 'form-error' : 'updated-at';
+        inventorySource.textContent = result.isStale
+          ? `Fuente: api_zaSmaOlt · se muestran ${number(result.cachedNaps)} NAPs reales de la última caché persistida; Smart OLT aún no ha podido actualizarla.`
+          : `Fuente: api_zaSmaOlt · ${number(result.cachedNaps)} NAPs disponibles${result.refreshedAt ? ` · actualizado ${date(result.refreshedAt)}` : ''}`;
+        table(
+          byId('inventory-table'),
+          ['NAP', 'OLT', 'PON', 'Estado', 'Clientes', 'Conexión'],
+          result.data.map(inventoryRow),
+          'No hay NAPs que coincidan con los filtros.',
+        );
+        renderFilterSummary('inventory-filters', 'inventory-filter-summary', 'inventory');
+        renderPagination('inventory-pagination', 'inventory', result);
+        setConnection('En línea');
+      } catch (error) { showViewError(error, 'No fue posible consultar api_zaSmaOlt.'); }
+    });
   }
 
   function alertRow(alert) {
@@ -321,13 +490,20 @@
   }
 
   async function loadAlerts() {
-    const params = queryFromForm(byId('alert-filters'));
-    params.set('limit', '50');
-    try {
-      const result = await api(`/alerts?${params}`);
-      byId('alerts-total').textContent = `${number(result.total)} recibidas`;
-      table(byId('alerts-table'), ['Evento', 'Severidad', 'Estado', 'Origen', 'OLT', 'Detectado'], result.data.map(alertRow), 'No se encontraron alertas');
-    } catch (error) { showViewError(error, 'No fue posible cargar las alertas.'); }
+    return whileLoading('alerts', async () => {
+      const params = queryFromForm(byId('alert-filters'));
+      params.set('page', String(state.pagination.alerts));
+      params.set('limit', '25');
+      setLiveStatus('Actualizando alertas…');
+      try {
+        const result = await api(`/alerts?${params}`);
+        byId('alerts-total').textContent = `${number(result.total)} recibidas`;
+        table(byId('alerts-table'), ['Evento', 'Severidad', 'Estado', 'Origen', 'OLT', 'Detectado'], result.data.map(alertRow), 'No se encontraron alertas');
+        renderFilterSummary('alert-filters', 'alert-filter-summary', 'alerts');
+        renderPagination('alerts-pagination', 'alerts', result);
+        setConnection('En línea');
+      } catch (error) { showViewError(error, 'No fue posible cargar las alertas.'); }
+    });
   }
 
   function reportRow(report) {
@@ -534,13 +710,24 @@
   }
 
   const titles = { overview: 'Resumen', inventory: 'Inventario real', incidents: 'Incidentes', alerts: 'Alertas', reports: 'Reportes', analytics: 'Analítica y SLA' };
-  function navigate(view) {
+  function viewFromHash() {
+    const view = window.location.hash.replace(/^#/, '');
+    return Object.hasOwn(titles, view) ? view : 'overview';
+  }
+
+  function navigate(view, fromHash = false) {
+    if (!Object.hasOwn(titles, view)) view = 'overview';
+    if (!fromHash && window.location.hash !== `#${view}`) {
+      window.location.hash = view;
+      return;
+    }
     state.currentView = view;
     document.querySelectorAll('.view').forEach((section) => section.classList.toggle('is-visible', section.id === view));
     document.querySelectorAll('.nav-link').forEach((button) => button.classList.toggle('is-active', button.dataset.view === view));
     elements.pageTitle.textContent = titles[view];
     closeMenu();
-    ({ overview: loadOverview, inventory: loadInventory, incidents: loadIncidents, alerts: loadAlerts, reports: loadReports, analytics: loadAnalytics }[view])();
+    updateAutoRefreshControl();
+    refreshCurrentView();
   }
 
   function openMenu() { elements.sidebar.classList.add('is-open'); elements.menuBackdrop.hidden = false; }
@@ -576,33 +763,46 @@
     document.querySelectorAll('.nav-link').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.view)));
     document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.go)));
     byId('open-menu').addEventListener('click', openMenu); byId('close-menu').addEventListener('click', closeMenu); elements.menuBackdrop.addEventListener('click', closeMenu);
-    byId('refresh-view').addEventListener('click', () => navigate(state.currentView));
+    elements.refreshView.addEventListener('click', refreshCurrentView);
+    elements.autoRefresh.addEventListener('click', () => setAutoRefresh(!state.autoRefresh));
     elements.userMenu.addEventListener('click', () => {
       const visible = elements.userPopover.hidden;
       elements.userPopover.hidden = !visible;
       elements.userMenu.setAttribute('aria-expanded', String(visible));
     });
     byId('logout').addEventListener('click', logout);
-    byId('incident-filters').addEventListener('submit', (event) => { event.preventDefault(); loadIncidents(); });
-    byId('clear-incident-filters').addEventListener('click', () => { byId('incident-filters').reset(); loadIncidents(); });
-    byId('inventory-filters').addEventListener('submit', (event) => { event.preventDefault(); loadInventory(); });
-    byId('clear-inventory-filters').addEventListener('click', () => { byId('inventory-filters').reset(); loadInventory(); });
-    byId('alert-filters').addEventListener('submit', (event) => { event.preventDefault(); loadAlerts(); });
-    byId('clear-alert-filters').addEventListener('click', () => { byId('alert-filters').reset(); loadAlerts(); });
+    byId('incident-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.incidents = 1; loadIncidents(); });
+    byId('clear-incident-filters').addEventListener('click', () => { byId('incident-filters').reset(); state.pagination.incidents = 1; loadIncidents(); });
+    byId('inventory-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.inventory = 1; loadInventory(); });
+    byId('clear-inventory-filters').addEventListener('click', () => { byId('inventory-filters').reset(); state.pagination.inventory = 1; loadInventory(); });
+    byId('alert-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.alerts = 1; loadAlerts(); });
+    byId('clear-alert-filters').addEventListener('click', () => { byId('alert-filters').reset(); state.pagination.alerts = 1; loadAlerts(); });
     byId('report-form').addEventListener('submit', generateReport);
     byId('incidents-table').addEventListener('click', (event) => { const button = event.target.closest('[data-incident-id]'); if (button) showIncident(button.dataset.incidentId); });
     byId('priority-incidents').addEventListener('click', (event) => { const button = event.target.closest('[data-incident-id]'); if (button) showIncident(button.dataset.incidentId); });
     byId('reports-table').addEventListener('click', (event) => { const button = event.target.closest('[data-report-id]'); if (button) downloadReport(button.dataset.reportId, button); });
     byId('close-dialog').addEventListener('click', () => elements.dialog.close());
     elements.dialog.addEventListener('click', (event) => { if (event.target === elements.dialog) elements.dialog.close(); });
+    window.addEventListener('hashchange', () => navigate(viewFromHash(), true));
+    document.addEventListener('click', (event) => {
+      if (!elements.userPopover.hidden && !elements.userMenu.contains(event.target) && !elements.userPopover.contains(event.target)) {
+        elements.userPopover.hidden = true;
+        elements.userMenu.setAttribute('aria-expanded', 'false');
+      }
+    });
   }
 
   async function boot() {
     bindEvents();
+    updateAutoRefreshControl();
     if (!state.accessToken) return;
     try {
       state.user = await api('/auth/me');
-      showApp();
+      elements.loginView.hidden = true;
+      elements.app.hidden = false;
+      displayUser();
+      scheduleAutoRefresh();
+      navigate(viewFromHash(), true);
     } catch { clearSession(); }
   }
 
