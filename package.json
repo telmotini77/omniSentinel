@@ -5,7 +5,7 @@
   "description": "Independent incident reporting microservice for ISP/FTTH operations.",
   "license": "UNLICENSED",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json --incremental false",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "node dist/main",
     "start:dev": "ts-node src/main.ts",
