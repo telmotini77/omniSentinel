@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../database/prisma.service';
 import { RabbitMqService } from '../rabbitmq/rabbitmq.service';
 import { HealthService } from './health.service';
@@ -19,10 +18,6 @@ describe('HealthService', () => {
           useValue: {
             $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
           },
-        },
-        {
-          provide: RedisService,
-          useValue: { ping: jest.fn().mockResolvedValue(undefined) },
         },
         {
           provide: RabbitMqService,
@@ -50,7 +45,6 @@ describe('HealthService', () => {
       status: 'healthy',
       services: {
         database: 'up',
-        redis: 'up',
         rabbitmq: 'up',
         apiZasmaolt: 'up',
         storage: 'up',
@@ -71,10 +65,6 @@ describe('HealthService', () => {
           useValue: {
             $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
           },
-        },
-        {
-          provide: RedisService,
-          useValue: { ping: jest.fn().mockResolvedValue(undefined) },
         },
         { provide: RabbitMqService, useValue: rabbitMq },
         {

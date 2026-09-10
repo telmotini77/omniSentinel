@@ -9,7 +9,6 @@ import { IncidentsModule } from './incidents/incidents.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { ImpactModule } from './impact/impact.module';
 import { ZasmaoltModule } from './integrations/zasmaolt/zasmaolt.module';
-import { CacheModule } from './cache/cache.module';
 import { CorrelationModule } from './correlation/correlation.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -53,7 +52,6 @@ import { UsersModule } from './users/users.module';
     }),
     DatabaseModule,
     ObservabilityModule,
-    CacheModule,
     RabbitMqModule,
     HealthModule,
     ZasmaoltModule,

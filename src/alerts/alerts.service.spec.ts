@@ -1,8 +1,11 @@
-import { AlertSeverity, AlertSource, AlertStatus } from '@prisma/client';
+import {
+  AlertSeverity,
+  AlertSource,
+  AlertStatus,
+  Prisma,
+} from '@prisma/client';
 import type { Alert } from '@prisma/client';
-import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../database/prisma.service';
 import type { NormalizedNetworkEventDto } from './dto/normalized-network-event.dto';
 import { AlertsService } from './alerts.service';
@@ -43,54 +46,34 @@ describe('AlertsService', () => {
     const alert = makeAlert();
     const prisma = {
       alert: {
-        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue(alert),
       },
     };
-    const redis = {
-      setIfAbsent: jest.fn().mockResolvedValue(true),
-      set: jest.fn().mockResolvedValue(undefined),
-      delete: jest.fn().mockResolvedValue(undefined),
-    };
     const module = await Test.createTestingModule({
-      providers: [
-        AlertsService,
-        { provide: PrismaService, useValue: prisma },
-        { provide: RedisService, useValue: redis },
-        {
-          provide: ConfigService,
-          useValue: { getOrThrow: jest.fn().mockReturnValue(86_400) },
-        },
-      ],
+      providers: [AlertsService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     const result = await module.get(AlertsService).ingest(event);
 
     expect(result).toEqual({ result: 'created', alert });
     expect(prisma.alert.create).toHaveBeenCalledTimes(1);
-    expect(redis.set).toHaveBeenCalledWith(
-      `alerts:external-event:${event.eventId}`,
-      alert.id,
-      86_400,
-    );
   });
 
-  it('returns the existing alert when an event was already claimed', async () => {
+  it('returns the existing alert when the database rejects a duplicate', async () => {
     const alert = makeAlert();
     const prisma = {
-      alert: { findUnique: jest.fn().mockResolvedValue(alert) },
+      alert: {
+        create: jest.fn().mockRejectedValue(
+          new Prisma.PrismaClientKnownRequestError('Duplicate', {
+            code: 'P2002',
+            clientVersion: 'test',
+          }),
+        ),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(alert),
+      },
     };
-    const redis = { setIfAbsent: jest.fn().mockResolvedValue(false) };
     const module = await Test.createTestingModule({
-      providers: [
-        AlertsService,
-        { provide: PrismaService, useValue: prisma },
-        { provide: RedisService, useValue: redis },
-        {
-          provide: ConfigService,
-          useValue: { getOrThrow: jest.fn().mockReturnValue(86_400) },
-        },
-      ],
+      providers: [AlertsService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     await expect(module.get(AlertsService).ingest(event)).resolves.toEqual({

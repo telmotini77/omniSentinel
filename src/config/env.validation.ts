@@ -21,9 +21,6 @@ export const environmentValidationSchema = Joi.object({
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
-  REDIS_URL: Joi.string()
-    .uri({ scheme: ['redis', 'rediss'] })
-    .required(),
   RABBITMQ_ENABLED: Joi.boolean().default(true),
   RABBITMQ_URL: Joi.string()
     .uri({ scheme: ['amqp', 'amqps'] })
@@ -105,8 +102,4 @@ export const environmentValidationSchema = Joi.object({
   ),
   RABBITMQ_MAX_RETRIES: Joi.number().integer().min(0).max(10).default(3),
   RABBITMQ_RETRY_DELAY_MS: Joi.number().integer().min(1_000).default(5_000),
-  ALERT_DEDUPLICATION_TTL_SECONDS: Joi.number()
-    .integer()
-    .positive()
-    .default(86_400),
 });

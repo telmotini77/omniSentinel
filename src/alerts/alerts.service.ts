@@ -1,7 +1,5 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Alert, AlertStatus, Prisma } from '@prisma/client';
-import { ConfigService } from '@nestjs/config';
-import { RedisService } from '../cache/redis.service';
 import { PrismaService } from '../database/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import type { ListAlertsQueryDto } from './dto/list-alerts-query.dto';
@@ -16,27 +14,10 @@ export interface AlertIngestResult {
 export class AlertsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-    private readonly configService: ConfigService,
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async ingest(event: NormalizedNetworkEventDto): Promise<AlertIngestResult> {
-    const key = `alerts:external-event:${event.eventId}`;
-    const ttl = this.configService.getOrThrow<number>(
-      'ALERT_DEDUPLICATION_TTL_SECONDS',
-    );
-    const cacheClaimed = await this.redis.setIfAbsent(key, 'processing', ttl);
-    if (!cacheClaimed) {
-      const existing = await this.prisma.alert.findUnique({
-        where: { externalEventId: event.eventId },
-      });
-      if (existing) {
-        this.metrics?.recordAlert(event.source, event.eventType, 'duplicate');
-        return { result: 'duplicate', alert: existing };
-      }
-    }
-
     try {
       const alert = await this.prisma.alert.create({
         data: {
@@ -59,7 +40,6 @@ export class AlertsService {
             : undefined,
         },
       });
-      await this.redis.set(key, alert.id, ttl);
       this.metrics?.recordAlert(event.source, event.eventType, 'created');
       return { result: 'created', alert };
     } catch (error: unknown) {
@@ -67,11 +47,9 @@ export class AlertsService {
         const duplicate = await this.prisma.alert.findUniqueOrThrow({
           where: { externalEventId: event.eventId },
         });
-        await this.redis.set(key, duplicate.id, ttl);
         this.metrics?.recordAlert(event.source, event.eventType, 'duplicate');
         return { result: 'duplicate', alert: duplicate };
       }
-      await this.redis.delete(key);
       this.metrics?.recordFailedEvent('alert_ingest');
       throw error;
     }

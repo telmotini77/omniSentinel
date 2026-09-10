@@ -10,7 +10,7 @@ import { NotificationEvent } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { Logger } from 'nestjs-pino';
-import { RedisService } from '../cache/redis.service';
+import { PrismaService } from '../database/prisma.service';
 import { ImpactEngineService } from '../impact/impact-engine.service';
 import {
   ZASMAOLT_ADAPTER,
@@ -29,8 +29,8 @@ const CURSOR_KEY = 'zasmaolt:operational-events:cursor';
  * Pulls source-confirmed operational events from api_zaSmaOlt.
  *
  * The source is public while OmniSentinel runs locally, so polling avoids a
- * reverse tunnel into an operator workstation. The durable source cursor and
- * `eventId` deduplication make restarts and retrying safe.
+ * reverse tunnel into an operator workstation. Its PostgreSQL cursor and
+ * `eventId` uniqueness make restarts and retrying safe with PostgreSQL only.
  */
 @Injectable()
 export class ZasmaoltEventPullerService
@@ -46,7 +46,7 @@ export class ZasmaoltEventPullerService
     private readonly incidentEngine: IncidentEngineService,
     private readonly impactEngine: ImpactEngineService,
     private readonly notifications: NotificationsService,
-    private readonly redis: RedisService,
+    private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly logger: Logger,
     @Optional() private readonly metrics?: MetricsService,
@@ -73,8 +73,10 @@ export class ZasmaoltEventPullerService
 
   private async restoreCursor(): Promise<void> {
     try {
-      const stored = await this.redis.get(CURSOR_KEY);
-      const parsed = Number.parseInt(stored ?? '', 10);
+      const stored = await this.prisma.systemSetting.findUnique({
+        where: { key: CURSOR_KEY },
+      });
+      const parsed = Number.parseInt(String(stored?.value ?? ''), 10);
       if (Number.isInteger(parsed) && parsed >= 0) this.cursor = parsed;
     } catch (error: unknown) {
       this.logger.warn(
@@ -192,7 +194,11 @@ export class ZasmaoltEventPullerService
       throw new Error('api_zaSmaOlt returned a non-monotonic event cursor');
     }
     this.cursor = cursor;
-    await this.redis.setPersistent(CURSOR_KEY, String(cursor));
+    await this.prisma.systemSetting.upsert({
+      where: { key: CURSOR_KEY },
+      create: { key: CURSOR_KEY, value: cursor },
+      update: { value: cursor },
+    });
   }
 
   private notificationEventFor(
@@ -217,7 +223,5 @@ export class ZasmaoltEventPullerService
 }
 
 class InvalidUpstreamEventError extends Error { }
-
-
 
 
