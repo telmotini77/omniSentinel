@@ -6,12 +6,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { CustomerConnectionStatus } from '@prisma/client';
 import { MetricsService } from '../../observability/metrics.service';
+import type { NormalizedNetworkEventDto } from '../../alerts/dto/normalized-network-event.dto';
 import type {
   ExternalCustomer,
   ExternalNap,
   ExternalNapPage,
   ExternalNapQuery,
   ExternalNapStatus,
+  ExternalOperationalEventPage,
   ZasmaoltAdapter,
 } from './zasmaolt.adapter';
 
@@ -83,6 +85,45 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
         data.length,
       refreshedAt: this.readString(response, 'refreshedAt') ?? null,
       isStale: response.isStale === true,
+    };
+  }
+
+  async listOperationalEvents(
+    after: number,
+    limit: number,
+  ): Promise<ExternalOperationalEventPage> {
+    const parameters = new URLSearchParams({
+      after: String(Math.max(0, after)),
+      limit: String(Math.min(Math.max(1, limit), 200)),
+    });
+    const response = await this.request(
+      `/integration/v1/events?${parameters.toString()}`,
+    );
+    if (!this.isRecord(response)) {
+      throw new ServiceUnavailableException({
+        error: 'INVALID_UPSTREAM_EVENT_FEED',
+        message: 'api_zaSmaOlt returned an invalid operational event feed',
+      });
+    }
+    const data = this.extractArray(response).map((entry) => {
+      const cursor = this.readNonNegativeInteger(entry, 'cursor');
+      if (cursor === undefined || !this.isRecord(entry.event)) {
+        throw new ServiceUnavailableException({
+          error: 'INVALID_UPSTREAM_EVENT',
+          message: 'api_zaSmaOlt returned an event without a valid cursor',
+        });
+      }
+      return {
+        cursor,
+        // Runtime validation is performed by the puller before persistence.
+        event: entry.event as unknown as NormalizedNetworkEventDto,
+      };
+    });
+    return {
+      data,
+      nextCursor:
+        this.readNonNegativeInteger(response, 'nextCursor', after) ?? after,
+      hasMore: response.hasMore === true,
     };
   }
 

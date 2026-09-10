@@ -33,6 +33,16 @@ export class RedisService implements OnModuleDestroy {
     await this.client.set(key, value, 'EX', ttlSeconds);
   }
 
+  async get(key: string): Promise<string | null> {
+    if (this.client.status === 'wait') await this.client.connect();
+    return this.client.get(key);
+  }
+
+  async setPersistent(key: string, value: string): Promise<void> {
+    if (this.client.status === 'wait') await this.client.connect();
+    await this.client.set(key, value);
+  }
+
   async delete(key: string): Promise<void> {
     if (this.client.status === 'wait') await this.client.connect();
     await this.client.del(key);

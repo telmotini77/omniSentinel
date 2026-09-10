@@ -1,4 +1,5 @@
 import type { CustomerConnectionStatus } from '@prisma/client';
+import type { NormalizedNetworkEventDto } from '../../alerts/dto/normalized-network-event.dto';
 
 export interface ExternalCustomer {
   externalCustomerId: string;
@@ -47,12 +48,28 @@ export interface ExternalNapPage {
   isStale: boolean;
 }
 
+/** A source-owned cursor lets OmniSentinel resume after a local restart. */
+export interface ExternalOperationalEvent {
+  cursor: number;
+  event: NormalizedNetworkEventDto;
+}
+
+export interface ExternalOperationalEventPage {
+  data: ExternalOperationalEvent[];
+  nextCursor: number;
+  hasMore: boolean;
+}
+
 export interface ZasmaoltAdapter {
   getCustomersForPon(
     oltExternalId: string,
     ponIdentifier: string,
   ): Promise<ExternalCustomer[]>;
   listNaps(query: ExternalNapQuery): Promise<ExternalNapPage>;
+  listOperationalEvents(
+    after: number,
+    limit: number,
+  ): Promise<ExternalOperationalEventPage>;
   checkHealth(): Promise<void>;
 }
 

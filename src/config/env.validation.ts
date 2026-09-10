@@ -43,6 +43,16 @@ export const environmentValidationSchema = Joi.object({
     .integer()
     .min(1)
     .default(30),
+  ZASMAOLT_EVENT_PULL_ENABLED: Joi.boolean().default(true),
+  ZASMAOLT_EVENT_PULL_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(5_000)
+    .default(15_000),
+  ZASMAOLT_EVENT_PULL_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(1)
+    .max(200)
+    .default(100),
   REPORT_STORAGE_PATH: Joi.string().default('./storage/reports'),
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),

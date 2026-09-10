@@ -4,6 +4,7 @@ import type {
   ExternalCustomer,
   ExternalNapPage,
   ExternalNapQuery,
+  ExternalOperationalEventPage,
   ZasmaoltAdapter,
 } from './zasmaolt.adapter';
 
@@ -50,5 +51,13 @@ export class MockZasmaoltAdapter implements ZasmaoltAdapter {
       refreshedAt: null,
       isStale: false,
     });
+  }
+
+  listOperationalEvents(
+    after: number,
+    limit: number,
+  ): Promise<ExternalOperationalEventPage> {
+    void limit;
+    return Promise.resolve({ data: [], nextCursor: after, hasMore: false });
   }
 }
