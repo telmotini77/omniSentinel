@@ -34,8 +34,7 @@ const CURSOR_KEY = 'zasmaolt:operational-events:cursor';
  */
 @Injectable()
 export class ZasmaoltEventPullerService
-  implements OnModuleInit, OnModuleDestroy
-{
+  implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private cursor = 0;
   private polling = false;
@@ -51,7 +50,7 @@ export class ZasmaoltEventPullerService
     private readonly configService: ConfigService,
     private readonly logger: Logger,
     @Optional() private readonly metrics?: MetricsService,
-  ) {}
+  ) { }
 
   async onModuleInit(): Promise<void> {
     if (
@@ -217,4 +216,8 @@ export class ZasmaoltEventPullerService
   }
 }
 
-class InvalidUpstreamEventError extends Error {}
+class InvalidUpstreamEventError extends Error { }
+
+
+
+
