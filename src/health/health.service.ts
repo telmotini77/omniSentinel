@@ -52,10 +52,15 @@ export class HealthService {
   }
 
   private async rabbitMqStatus(): Promise<DependencyStatus> {
-    if (!this.configService.getOrThrow<boolean>('RABBITMQ_ENABLED')) {
+    if (!this.rabbitMqIsEnabled()) {
       return 'disabled';
     }
     return this.checkDependency(() => this.rabbitMq.assertInfrastructure());
+  }
+
+  private rabbitMqIsEnabled(): boolean {
+    const value = this.configService.getOrThrow<unknown>('RABBITMQ_ENABLED');
+    return value === true || value === 'true';
   }
 
   private async checkDependency(

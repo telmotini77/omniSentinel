@@ -32,7 +32,11 @@ describe('HealthService', () => {
         },
         {
           provide: ConfigService,
-          useValue: { getOrThrow: jest.fn().mockReturnValue('.') },
+          useValue: {
+            getOrThrow: jest.fn((key: string) =>
+              key === 'RABBITMQ_ENABLED' ? true : '.',
+            ),
+          },
         },
         {
           provide: ZASMAOLT_ADAPTER,
@@ -55,7 +59,7 @@ describe('HealthService', () => {
     jest.restoreAllMocks();
   });
 
-  it('reports RabbitMQ as disabled without probing it when disabled by config', async () => {
+  it('reports RabbitMQ as disabled without probing it when config is the string false', async () => {
     const rabbitMq = {
       assertInfrastructure: jest.fn().mockResolvedValue(undefined),
     };
@@ -77,7 +81,7 @@ describe('HealthService', () => {
           provide: ConfigService,
           useValue: {
             getOrThrow: jest.fn((key: string) =>
-              key === 'RABBITMQ_ENABLED' ? false : '.',
+              key === 'RABBITMQ_ENABLED' ? 'false' : '.',
             ),
           },
         },

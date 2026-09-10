@@ -35,7 +35,7 @@ export class AlertConsumerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    if (!this.configService.getOrThrow<boolean>('RABBITMQ_ENABLED')) {
+    if (!this.rabbitMqIsEnabled()) {
       this.logger.log('RabbitMQ alert consumer is disabled');
       return;
     }
@@ -52,6 +52,11 @@ export class AlertConsumerService implements OnModuleInit, OnModuleDestroy {
       { queue: this.configService.getOrThrow<string>('RABBITMQ_ALERT_QUEUE') },
       'Alert consumer started',
     );
+  }
+
+  private rabbitMqIsEnabled(): boolean {
+    const value = this.configService.getOrThrow<unknown>('RABBITMQ_ENABLED');
+    return value === true || value === 'true';
   }
 
   async onModuleDestroy(): Promise<void> {
