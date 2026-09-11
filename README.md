@@ -102,6 +102,55 @@ Abra el dashboard de operación en `http://localhost:3000/dashboard/`. Un usuari
 
 Para ejecutar el conjunto completo en contenedores: `docker compose up -d --build`. RabbitMQ Management queda en `http://localhost:15672` (credenciales de desarrollo: `incident_user` / `incident_password`). MailHog se habilita con `docker compose --profile mail up -d`.
 
+### Despliegue como microservicio de api_zaSmaOlt
+
+Los repositorios permanecen separados, pero pueden ejecutarse en el mismo
+servidor Docker y comunicarse sin pasar por Internet. No una los repositorios,
+no publique el puerto `3010` y no use `localhost` entre contenedores.
+
+En el servidor, cree una vez la red privada compartida:
+
+```bash
+docker network inspect omnisentinel_private >/dev/null 2>&1 \
+  || docker network create omnisentinel_private
+```
+
+Despliegue primero `api_zaSmaOlt` desde su propio directorio, usando su archivo
+complementario:
+
+```bash
+cd /opt/alertZabSmartOLT
+docker compose -f docker-compose.yml -f docker-compose.omnisentinel.yml up -d --build
+```
+
+En el `.env` de ese servicio mantenga `OMNISENTINEL_ENABLED=false` para usar el
+feed persistente por consulta, y configure `OMNISENTINEL_SERVICE_API_KEY` con
+un secreto de servicio aleatorio.
+
+Después despliegue OmniSentinel desde un directorio distinto:
+
+```bash
+cd /opt/omniSentinel
+docker compose -f docker-compose.yml -f docker-compose.microservice.yml up -d --build
+```
+
+En el `.env` de OmniSentinel configure `ZASMAOLT_API_KEY` con exactamente el
+mismo valor de `OMNISENTINEL_SERVICE_API_KEY`; mantenga
+`ZASMAOLT_EVENT_PULL_ENABLED=true`. El archivo complementario asigna
+automáticamente `ZASMAOLT_API_URL=http://api-zasmaolt:3010` dentro del
+contenedor. `ZASMAOLT_INGEST_API_KEY` debe seguir siendo un secreto distinto,
+porque protege la ingestión HTTP opcional.
+
+La comunicación resultante es:
+
+```text
+api_zaSmaOlt (api-zasmaolt:3010) -> red Docker privada -> OmniSentinel
+```
+
+El alias `api-zasmaolt` no existe fuera de Docker y el puerto `3010` continúa
+limitado al host. Si se requiere acceso humano al dashboard, publique solamente
+OmniSentinel mediante un proxy inverso o una solución de acceso seguro.
+
 ## Verificación
 
 Ejecute `npm run build`, `npm test` y `npm run lint`. El endpoint de salud devuelve `healthy` cuando PostgreSQL, Redis, RabbitMQ, el almacenamiento y `api_zaSmaOlt` son accesibles; de otro modo devuelve HTTP 503 con el estado por dependencia.

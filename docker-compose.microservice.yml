@@ -1,0 +1,20 @@
+# Deployment overlay for running OmniSentinel beside api_zaSmaOlt on the same
+# Docker host. The repositories remain independent; this only attaches the
+# API containers to a private, explicitly created Docker network.
+services:
+  api_incident_report:
+    environment:
+      # `api-zasmaolt` is the alias defined by api_zaSmaOlt's companion
+      # docker-compose.omnisentinel.yml file. Do not use localhost here:
+      # localhost inside this container is OmniSentinel itself.
+      ZASMAOLT_API_URL: http://api-zasmaolt:3010
+    networks:
+      default: {}
+      omnisentinel_private:
+        aliases:
+          - omnisentinel
+
+networks:
+  omnisentinel_private:
+    name: omnisentinel_private
+    external: true
