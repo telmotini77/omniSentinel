@@ -28,9 +28,9 @@ const CURSOR_KEY = 'zasmaolt:operational-events:cursor';
 /**
  * Pulls source-confirmed operational events from api_zaSmaOlt.
  *
- * The source is public while OmniSentinel runs locally, so polling avoids a
- * reverse tunnel into an operator workstation. Its PostgreSQL cursor and
- * `eventId` uniqueness make restarts and retrying safe with PostgreSQL only.
+ * The source can be reached over a private Docker network or HTTPS. Its
+ * PostgreSQL cursor and `eventId` uniqueness make restarts and retrying safe
+ * with PostgreSQL only.
  */
 @Injectable()
 export class ZasmaoltEventPullerService
@@ -223,5 +223,4 @@ export class ZasmaoltEventPullerService
 }
 
 class InvalidUpstreamEventError extends Error { }
-
 

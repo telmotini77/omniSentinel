@@ -16,6 +16,10 @@ async function bootstrap(): Promise<void> {
   const logger = app.get(Logger);
   const config = app.get(ConfigService);
   app.useLogger(logger);
+  // Propagate Docker/system shutdown signals through Nest. This invokes
+  // OnModuleDestroy on the api_zaSmaOlt event puller, clears its timer, and
+  // avoids overlapping pollers while the microservice is restarted.
+  app.enableShutdownHooks();
   app.use(helmet());
   app.useStaticAssets(join(process.cwd(), 'public'));
   const corsOrigins = config
