@@ -32,7 +32,9 @@ export class AuthService {
     password: string,
     context: ClientContext,
   ): Promise<TokenResponseDto> {
-    const user = await this.usersService.findForAuthentication(identity);
+    // Ignore accidental whitespace around a pasted username or email, but
+    // never alter the password because whitespace is valid in a password.
+    const user = await this.usersService.findForAuthentication(identity.trim());
     if (
       !user ||
       user.status !== 'ACTIVE' ||

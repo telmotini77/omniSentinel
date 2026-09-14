@@ -146,6 +146,10 @@
               <article class="metric-card"><span class="metric-icon metric-icon--amber">◉</span><p>Clientes afectados</p><strong id="metric-customers">—</strong><small>en incidentes activos</small></article>
               <article class="metric-card"><span class="metric-icon metric-icon--purple">⌁</span><p>Disponibilidad</p><strong id="metric-availability">—</strong><small>últimos 30 días</small></article>
             </div>
+            <section id="operations-pulse" class="operations-pulse" aria-live="polite" aria-label="Pulso de la operación">
+              <div class="operations-pulse__copy"><span class="operations-pulse__signal" aria-hidden="true"></span><div><p class="eyebrow">PULSO OPERATIVO</p><h2 id="operations-pulse-title">Cargando estado de la red…</h2><p id="operations-pulse-detail">Consultando incidentes, disponibilidad y eventos recibidos.</p></div></div>
+              <dl class="operations-pulse__stats"><div><dt>ONU offline</dt><dd id="pulse-onus">—</dd></div><div><dt>Resueltos hoy</dt><dd id="pulse-resolved">—</dd></div><div><dt>MTTR</dt><dd id="pulse-mttr">—</dd></div></dl>
+            </section>
             <section class="quick-actions" aria-label="Accesos rápidos">
               <button class="quick-action" type="button" data-go="incidents">
                 <span class="quick-action-icon quick-action-icon--red" aria-hidden="true">!</span>

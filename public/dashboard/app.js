@@ -94,6 +94,16 @@
     return payload?.message || payload?.error || `La solicitud no pudo completarse (${status}).`;
   }
 
+  function loginMessage(error) {
+    if (error instanceof ApiError) {
+      if (error.status === 401) return 'Usuario o contraseña incorrectos. Usa solo el valor de ADMIN_USERNAME o ADMIN_EMAIL, sin "ADMIN_USERNAME=".';
+      if (error.status === 429) return 'Demasiados intentos. Espera un minuto antes de volver a intentar.';
+      if (error.status >= 500) return 'El servidor no pudo completar el inicio de sesión. Revisa el registro del contenedor.';
+      return error.message;
+    }
+    return 'No se pudo conectar con el servidor. Confirma que estás usando http://10.101.2.11:3000.';
+  }
+
   async function refreshAccessToken() {
     if (!state.refreshToken) return false;
     const response = await fetch(`${API}/auth/refresh`, {
@@ -133,6 +143,9 @@
   }
 
   function setSession(result) {
+    if (!result?.accessToken || !result?.refreshToken || !result?.user) {
+      throw new ApiError('El servidor respondió sin una sesión válida.', 502);
+    }
     state.accessToken = result.accessToken;
     state.refreshToken = result.refreshToken;
     state.user = result.user || state.user;
@@ -398,6 +411,16 @@
         setMetric('metric-onus', number(summary.offlineOnus));
         setMetric('metric-resolved', number(summary.resolvedToday));
         setMetric('metric-mttr', minutes(summary.averageMttr));
+        setMetric('pulse-onus', number(summary.offlineOnus));
+        setMetric('pulse-resolved', number(summary.resolvedToday));
+        setMetric('pulse-mttr', minutes(summary.averageMttr));
+        const needsAttention = Number(summary.criticalIncidents) > 0;
+        const pulse = byId('operations-pulse');
+        pulse.classList.toggle('is-attention', needsAttention);
+        byId('operations-pulse-title').textContent = needsAttention ? 'Atención prioritaria requerida' : 'Operación estable';
+        byId('operations-pulse-detail').textContent = needsAttention
+          ? `${number(summary.criticalIncidents)} incidentes críticos requieren atención inmediata.`
+          : `Sin incidentes críticos. ${number(summary.offlineOnus)} ONU offline bajo seguimiento.`;
         byId('overview-updated').textContent = `Actualizado ${date(new Date())}`;
         const priority = incidents.data
           .filter((item) => ['DISASTER', 'CRITICAL', 'MAJOR'].includes(item.severity))
@@ -738,12 +761,14 @@
     elements.loginError.hidden = true;
     setButtonBusy(elements.loginSubmit, true, 'Entrar al panel');
     const form = new FormData(elements.loginForm);
+    const identity = String(form.get('identity') || '').trim();
+    const password = String(form.get('password') || '');
     try {
-      const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ identity: form.get('identity'), password: form.get('password') }) }, false);
+      const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ identity, password }) }, false);
       setSession(result);
       showApp();
     } catch (error) {
-      elements.loginError.textContent = messageFrom(error, 'No se pudo iniciar sesión.');
+      elements.loginError.textContent = loginMessage(error);
       elements.loginError.hidden = false;
     } finally { setButtonBusy(elements.loginSubmit, false, 'Entrar al panel'); }
   }
