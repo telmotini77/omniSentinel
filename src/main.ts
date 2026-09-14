@@ -22,7 +22,7 @@ async function bootstrap(): Promise<void> {
   // avoids overlapping pollers while the microservice is restarted.
   app.enableShutdownHooks();
   app.use(helmet());
-  app.useStaticAssets(join(process.cwd(), 'public'));
+  app.useStaticAssets(join(process.cwd(), 'public'), { prefix: '/' });
   const corsOrigins = config
     .getOrThrow<string>('CORS_ORIGINS')
     .split(',')
