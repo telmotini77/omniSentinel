@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { join } from 'node:path';
@@ -42,8 +43,20 @@ async function bootstrap(): Promise<void> {
   });
   const httpServer = app.getHttpAdapter().getInstance() as {
     set(setting: string, value: boolean): void;
+    get(path: string, handler: (request: Request, response: Response) => void): void;
   };
   httpServer.set('trust proxy', config.getOrThrow<boolean>('TRUST_PROXY'));
+  const dashboardPage = join(process.cwd(), 'public', 'dashboard', 'index.html');
+  const serveLogin = (_request: Request, response: Response): void => {
+    response.sendFile(dashboardPage);
+  };
+  const redirectDashboard = (_request: Request, response: Response): void => {
+    response.redirect(302, '/login');
+  };
+  httpServer.get('/login', serveLogin);
+  httpServer.get('/login/', serveLogin);
+  httpServer.get('/dashboard', redirectDashboard);
+  httpServer.get('/dashboard/', redirectDashboard);
   app.setGlobalPrefix(config.getOrThrow<string>('API_PREFIX'), {
     exclude: [{ path: 'metrics', method: RequestMethod.GET }],
   });

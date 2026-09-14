@@ -80,7 +80,7 @@ Los módulos de alertas, incidentes, correlación, impacto, reportes, SLA y noti
 
 - Pruebas unitarias para SLA, notificaciones, adaptadores y observabilidad; prueba E2E contra PostgreSQL, Redis y RabbitMQ que confirma salud, métricas y protección JWT de las estadísticas.
 - Métricas Prometheus en `GET /metrics`: métricas estándar de proceso más `alerts_received_total`, `incidents_created_total`, `incidents_resolved_total`, `reports_generated_total`, `affected_customers_total`, `failed_events_total` y los histogramas de duración de eventos, reportes y llamadas a `api_zaSmaOlt`.
-- Dashboard web responsive en `GET /dashboard/`: inicio de sesión, resumen operativo, incidentes, alertas, impacto, reportes y analítica. Respeta los permisos existentes de cada usuario.
+- Dashboard web responsive en `GET /login`: inicio de sesión, resumen operativo, incidentes, alertas, impacto, reportes y analítica. Respeta los permisos existentes de cada usuario. La ruta anterior `/dashboard/` redirige a `/login`.
 - El endpoint de métricas queda fuera del prefijo `/api/v1` para facilitar el scraping. En producción se desactiva si `METRICS_ENABLED` no se define; al activarlo requiere un bearer token de al menos 32 caracteres.
 - Endurecimiento operativo: CORS explícito sin comodines, lista de métodos/encabezados permitidos, `Helmet`, Swagger deshabilitado por defecto en producción y soporte de `TRUST_PROXY` para un proxy inverso confiable.
 - Actualización de seguridad para la dependencia transitiva `multer` a `2.3.0` mediante una anulación explícita y limpieza segura de conexiones Redis no inicializadas al apagar la aplicación.
@@ -98,7 +98,7 @@ Los módulos de alertas, incidentes, correlación, impacto, reportes, SLA y noti
 5. Cargue los roles, permisos y administrador inicial: `npm run prisma:seed`.
 6. Inicie la API: `npm run start:dev`.
 
-Abra el dashboard de operación en `http://localhost:3000/dashboard/`. Un usuario con rol `VIEWER` puede consultar incidentes, alertas, reportes y métricas operativas; los roles con permisos adicionales verán acciones como reconocer incidentes, actualizar su estado, resolverlos o generar reportes.
+Abra el dashboard de operación en `http://localhost:3000/login`. Un usuario con rol `VIEWER` puede consultar incidentes, alertas, reportes y métricas operativas; los roles con permisos adicionales verán acciones como reconocer incidentes, actualizar su estado, resolverlos o generar reportes.
 
 Para ejecutar el conjunto completo en contenedores: `docker compose up -d --build`. RabbitMQ Management queda en `http://localhost:15672` (credenciales de desarrollo: `incident_user` / `incident_password`). MailHog se habilita con `docker compose --profile mail up -d`.
 
