@@ -95,6 +95,9 @@ async function main(): Promise<void> {
           email: adminEmail,
           username: adminUsername,
           displayName: 'System Administrator',
+          // Keep the administrator credential in sync with ADMIN_PASSWORD.
+          // This also makes a deliberate seed run a safe password-recovery path.
+          passwordHash,
           status: 'ACTIVE',
         },
       })
