@@ -759,10 +759,15 @@
   async function login(event) {
     event.preventDefault();
     elements.loginError.hidden = true;
-    setButtonBusy(elements.loginSubmit, true, 'Entrar al panel');
     const form = new FormData(elements.loginForm);
     const identity = String(form.get('identity') || '').trim();
     const password = String(form.get('password') || '');
+    if (!identity || !password) {
+      elements.loginError.textContent = 'Completa usuario o correo y contraseña antes de continuar.';
+      elements.loginError.hidden = false;
+      return;
+    }
+    setButtonBusy(elements.loginSubmit, true, 'Entrar al panel');
     try {
       const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ identity, password }) }, false);
       setSession(result);
