@@ -11,7 +11,9 @@ services:
       RABBITMQ_URL: amqp://incident_user:incident_password@rabbitmq:5672
       REPORT_STORAGE_PATH: /app/storage/reports
     ports:
-      - "${PORT:-3000}:3000"
+      # Set BIND_HOST=10.101.2.11 on the target server to expose OmniSentinel
+      # only through that interface. The default preserves local development.
+      - "${BIND_HOST:-0.0.0.0}:${PORT:-3000}:3000"
     volumes:
       - ./storage/reports:/app/storage/reports
     depends_on:

@@ -1,0 +1,7 @@
+# Use this overlay when OmniSentinel runs on a different server from
+# api_zaSmaOlt. It deliberately does not rely on a Docker-network alias.
+services:
+  api_incident_report:
+    environment:
+      RABBITMQ_ENABLED: "true"
+      ZASMAOLT_API_URL: ${ZASMAOLT_REMOTE_URL:?Set ZASMAOLT_REMOTE_URL to the reachable principal API URL, including port 3010}

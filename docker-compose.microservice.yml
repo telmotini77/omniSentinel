@@ -2,8 +2,18 @@
 # Docker host. The repositories remain independent; this only attaches the
 # API containers to a private, explicitly created Docker network.
 services:
+  postgres:
+    networks:
+      default: {}
+      omnisentinel_private:
+        aliases:
+          - postgres.db
+
   api_incident_report:
     environment:
+      # The remote anchor is an operational deployment: keep its event bus
+      # enabled so health checks cannot silently accept a disabled RabbitMQ.
+      RABBITMQ_ENABLED: "true"
       # `api-zasmaolt` is the alias defined by api_zaSmaOlt's companion
       # docker-compose.omnisentinel.yml file. Do not use localhost here:
       # localhost inside this container is OmniSentinel itself.

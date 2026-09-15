@@ -92,7 +92,10 @@ async function bootstrap(): Promise<void> {
     );
   }
 
-  await app.listen(config.getOrThrow<number>('PORT'));
+  await app.listen(
+    config.getOrThrow<number>('PORT'),
+    config.getOrThrow<string>('HOST'),
+  );
 }
 
 void bootstrap();

@@ -151,6 +151,31 @@ El alias `api-zasmaolt` no existe fuera de Docker y el puerto `3010` continúa
 limitado al host. Si se requiere acceso humano al dashboard, publique solamente
 OmniSentinel mediante un proxy inverso o una solución de acceso seguro.
 
+### Microservicio anclado en otro servidor
+
+Si OmniSentinel se ejecuta en el servidor que posee `10.101.2.11`, configure en
+su archivo de entorno `HOST=0.0.0.0` y `BIND_HOST=10.101.2.11`. Así el proceso
+escucha dentro del contenedor y Docker publica el puerto `3000` exclusivamente
+en esa interfaz. No configure esa IP en otro equipo: un proceso sólo puede
+enlazarse a direcciones asignadas localmente.
+
+Cuando la API principal esté en un servidor distinto, `ZASMAOLT_API_URL` debe
+usar la dirección o el nombre DNS alcanzable de esa API seguido de `:3010`; no
+debe usar `127.0.0.1`. Despliegue OmniSentinel en ese servidor con
+`docker-compose.yml` y `docker-compose.remote-api.yml`, definiendo
+`ZASMAOLT_REMOTE_URL` con la URL alcanzable de la API principal. En el servidor
+de la API principal use el perfil `docker-compose.remote-omnisentinel.yml`,
+que establece `OMNISENTINEL_API_URL=http://10.101.2.11:3000`. Autorice únicamente el tráfico
+TCP entre ambos servidores: API principal → `10.101.2.11:3000` y servidor de
+OmniSentinel → API principal `:3010`. Mantenga `CORS_ORIGINS` con los orígenes
+exactos de los navegadores; CORS no sustituye esas reglas de red entre servicios.
+
+Antes de enrutar producción al servidor remoto, confirme que su endpoint de
+salud muestra PostgreSQL, RabbitMQ, almacenamiento y `apiZasmaolt` en estado
+`up`. Si RabbitMQ aparece como `disabled`, configure `RABBITMQ_ENABLED=true`,
+mantenga el servicio RabbitMQ iniciado y aplique nuevamente el despliegue; el
+perfil `docker-compose.microservice.yml` ya exige ese valor.
+
 ## Verificación
 
 Ejecute `npm run build`, `npm test` y `npm run lint`. El endpoint de salud devuelve `healthy` cuando PostgreSQL, Redis, RabbitMQ, el almacenamiento y `api_zaSmaOlt` son accesibles; de otro modo devuelve HTTP 503 con el estado por dependencia.

@@ -5,6 +5,9 @@ export const environmentValidationSchema = Joi.object({
     .valid('development', 'test', 'production')
     .default('development'),
   PORT: Joi.number().port().default(3000),
+  // The process listens on all container interfaces by default. Docker decides
+  // which host interface publishes the port through BIND_HOST.
+  HOST: Joi.string().trim().default('0.0.0.0'),
   API_PREFIX: Joi.string().default('api/v1'),
   CORS_ORIGINS: Joi.string()
     .custom((value: unknown, helpers) => {
