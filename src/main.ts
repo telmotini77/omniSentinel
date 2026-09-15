@@ -22,7 +22,6 @@ async function bootstrap(): Promise<void> {
   // avoids overlapping pollers while the microservice is restarted.
   app.enableShutdownHooks();
   app.use(helmet());
-  app.useStaticAssets(join(process.cwd(), 'public'), { prefix: '/' });
   const corsOrigins = config
     .getOrThrow<string>('CORS_ORIGINS')
     .split(',')
@@ -46,17 +45,25 @@ async function bootstrap(): Promise<void> {
     get(path: string, handler: (request: Request, response: Response) => void): void;
   };
   httpServer.set('trust proxy', config.getOrThrow<boolean>('TRUST_PROXY'));
+  const publicDir = join(process.cwd(), 'public');
+  const landingPage = join(publicDir, 'index.html');
   const dashboardPage = join(process.cwd(), 'public', 'dashboard', 'index.html');
+  const serveLanding = (_request: Request, response: Response): void => {
+    response.sendFile(landingPage);
+  };
   const serveLogin = (_request: Request, response: Response): void => {
     response.sendFile(dashboardPage);
   };
   const redirectDashboard = (_request: Request, response: Response): void => {
-    response.redirect(302, '/login');
+    response.redirect(302, '/');
   };
+  httpServer.get('/', serveLanding);
+  httpServer.get('/index.html', (_request, response) => response.redirect(301, '/'));
   httpServer.get('/login', serveLogin);
   httpServer.get('/login/', serveLogin);
   httpServer.get('/dashboard', redirectDashboard);
   httpServer.get('/dashboard/', redirectDashboard);
+  app.useStaticAssets(publicDir, { prefix: '/' });
   app.setGlobalPrefix(config.getOrThrow<string>('API_PREFIX'), {
     exclude: [{ path: 'metrics', method: RequestMethod.GET }],
   });
