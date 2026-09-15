@@ -786,9 +786,12 @@
   function bindEvents() {
     elements.loginForm.addEventListener('submit', login);
     elements.togglePassword.addEventListener('click', () => {
-      const hidden = elements.password.type === 'password';
-      elements.password.type = hidden ? 'text' : 'password';
-      elements.togglePassword.setAttribute('aria-label', hidden ? 'Ocultar contraseña' : 'Mostrar contraseña');
+      const willShowPassword = elements.password.type === 'password';
+      elements.password.type = willShowPassword ? 'text' : 'password';
+      elements.togglePassword.textContent = willShowPassword ? 'Ocultar' : 'Mostrar';
+      elements.togglePassword.setAttribute('aria-label', willShowPassword ? 'Ocultar contraseña' : 'Mostrar contraseña');
+      elements.togglePassword.setAttribute('aria-pressed', String(willShowPassword));
+      elements.password.focus();
     });
     document.querySelectorAll('.nav-link').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.view)));
     document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.go)));
