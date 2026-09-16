@@ -2,6 +2,12 @@
 
 Microservicio independiente para convertir alertas normalizadas entregadas por `api_zaSmaOlt` en incidentes, impacto de clientes y reportes. No contiene GIS, aprovisionamiento ONU ni conexiones directas a SmartOLT o Zabbix.
 
+## TypeScript
+
+El backend y el dashboard se mantienen como fuentes TypeScript. `npm run build`
+compila la API y el cliente del dashboard hacia `dist/`; en producción Nest
+sirve los activos compilados desde `dist/public`.
+
 ## Fase 1 implementada
 
 - NestJS con TypeScript estricto, Pino, Helmet, CORS y filtro global de errores.

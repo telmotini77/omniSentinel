@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -45,9 +46,13 @@ async function bootstrap(): Promise<void> {
     get(path: string, handler: (request: Request, response: Response) => void): void;
   };
   httpServer.set('trust proxy', config.getOrThrow<boolean>('TRUST_PROXY'));
-  const publicDir = join(process.cwd(), 'public');
+  const sourcePublicDir = join(process.cwd(), 'public');
+  const compiledPublicDir = join(process.cwd(), 'dist', 'public');
+  const publicDir = existsSync(compiledPublicDir)
+    ? compiledPublicDir
+    : sourcePublicDir;
   const landingPage = join(publicDir, 'index.html');
-  const dashboardPage = join(process.cwd(), 'public', 'dashboard', 'index.html');
+  const dashboardPage = join(publicDir, 'dashboard', 'index.html');
   const serveLanding = (_request: Request, response: Response): void => {
     response.sendFile(landingPage);
   };
