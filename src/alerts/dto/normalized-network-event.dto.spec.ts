@@ -5,7 +5,7 @@ import { NormalizedNetworkEventDto } from './normalized-network-event.dto';
 
 const event = {
   eventId: 'zasmaolt:unit:001',
-  eventType: 'onu.offline',
+  eventType: 'pon.los',
   severity: AlertSeverity.MAJOR,
   source: AlertSource.API_ZASMAOLT,
   timestamp: '2026-09-09T12:00:00.000Z',
@@ -29,6 +29,17 @@ describe('NormalizedNetworkEventDto', () => {
       );
 
       expect(errors.some((error) => error.property === 'source')).toBe(true);
+    },
+  );
+
+  it.each(['onu.power_fail', 'onu.los', 'pon.down', 'olt.down'])(
+    'rejects non-approved event type %s',
+    async (eventType) => {
+      const errors = await validate(
+        plainToInstance(NormalizedNetworkEventDto, { ...event, eventType }),
+      );
+
+      expect(errors.some((error) => error.property === 'eventType')).toBe(true);
     },
   );
 });

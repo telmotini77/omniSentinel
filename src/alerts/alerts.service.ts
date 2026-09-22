@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service';
 import { MetricsService } from '../observability/metrics.service';
 import type { ListAlertsQueryDto } from './dto/list-alerts-query.dto';
 import type { NormalizedNetworkEventDto } from './dto/normalized-network-event.dto';
+import { APPROVED_ALERT_EVENT_TYPES } from './constants/network-event-types';
 
 export interface AlertIngestResult {
   result: 'created' | 'duplicate';
@@ -56,7 +57,9 @@ export class AlertsService {
   }
 
   async findById(id: string): Promise<Alert> {
-    const alert = await this.prisma.alert.findUnique({ where: { id } });
+    const alert = await this.prisma.alert.findFirst({
+      where: { id, eventType: { in: APPROVED_ALERT_EVENT_TYPES } },
+    });
     if (!alert)
       throw new NotFoundException({
         error: 'ALERT_NOT_FOUND',
@@ -68,11 +71,18 @@ export class AlertsService {
   async list(
     query: ListAlertsQueryDto,
   ): Promise<{ data: Alert[]; total: number; page: number; limit: number }> {
+    const eventTypes = query.eventType
+      ? APPROVED_ALERT_EVENT_TYPES.includes(
+          query.eventType as (typeof APPROVED_ALERT_EVENT_TYPES)[number],
+        )
+        ? [query.eventType]
+        : []
+      : APPROVED_ALERT_EVENT_TYPES;
     const where: Prisma.AlertWhereInput = {
       severity: query.severity,
       status: query.status,
       source: query.source,
-      eventType: query.eventType,
+      eventType: { in: eventTypes },
       oltExternalId: query.oltExternalId,
       ponIdentifier: query.ponIdentifier,
       detectedAt:

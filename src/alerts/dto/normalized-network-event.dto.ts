@@ -21,7 +21,7 @@ export class NormalizedNetworkEventDto {
   @MaxLength(150)
   eventId!: string;
 
-  @ApiProperty({ enum: NETWORK_EVENT_TYPES, example: 'pon.down' })
+  @ApiProperty({ enum: NETWORK_EVENT_TYPES, example: 'pon.los' })
   @IsIn(NETWORK_EVENT_TYPES)
   eventType!: string;
 

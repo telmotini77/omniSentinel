@@ -29,7 +29,9 @@ Los módulos de alertas, incidentes, correlación, impacto, reportes, SLA y noti
 
 ## Fase 3 implementada
 
-- Contrato DTO estricto para los catorce eventos normalizados de `api_zaSmaOlt`.
+- Contrato DTO estricto: solo recibe `pon.los` (LOS confirmado en puerto PON) y
+  `fiber.cut` (corte de fibra confirmado). Los eventos de energía no ingresan
+  al microservicio.
 - Persistencia de alertas con restricción única en `externalEventId`, deduplicación rápida en Redis e idempotencia segura ante concurrencia en PostgreSQL.
 - Consumidor durable de RabbitMQ para `network.events` con prefetch de 20 mensajes, reintentos con backoff exponencial y cola de mensajes fallidos `network.events.dlq`.
 - Ingestión HTTP protegida por el encabezado `x-integration-api-key`: `POST /api/v1/alerts/ingest`.

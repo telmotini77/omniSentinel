@@ -12,9 +12,9 @@ import { AlertsService } from './alerts.service';
 
 const event: NormalizedNetworkEventDto = {
   eventId: 'evt-unit-001',
-  eventType: 'pon.down',
+  eventType: 'pon.los',
   severity: AlertSeverity.CRITICAL,
-  source: AlertSource.ZABBIX,
+  source: AlertSource.API_ZASMAOLT,
   timestamp: '2026-09-09T09:32:00-05:00',
   device: { oltId: 'OLT-CUE-01', board: 1, pon: 4 },
 };

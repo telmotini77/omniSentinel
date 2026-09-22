@@ -42,7 +42,7 @@ export class ListAlertsQueryDto {
   @IsEnum(AlertSource)
   source?: AlertSource;
 
-  @ApiPropertyOptional({ example: 'pon.down' })
+  @ApiPropertyOptional({ example: 'pon.los' })
   @IsOptional()
   @IsString()
   eventType?: string;
