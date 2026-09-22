@@ -7,7 +7,7 @@
   const REFRESH_KEY = 'omniSentinel.refreshToken';
   const AUTO_REFRESH_KEY = 'omniSentinel.dashboard.autoRefresh';
   const AUTO_REFRESH_INTERVAL_MS = 30_000;
-  const LIVE_VIEWS = new Set(['overview', 'incidents', 'alerts']);
+  const LIVE_VIEWS = new Set(['overview']);
   const state = {
     accessToken: sessionStorage.getItem(TOKEN_KEY),
     refreshToken: sessionStorage.getItem(REFRESH_KEY),
@@ -25,7 +25,6 @@
     loginView: byId('login-view'), app: byId('app'), loginForm: byId('login-form'),
     loginError: byId('login-error'), loginSubmit: byId('login-submit'),
     password: byId('password'), togglePassword: byId('toggle-password'),
-    sidebar: byId('sidebar'), menuBackdrop: byId('menu-backdrop'),
     pageTitle: byId('page-title'), userName: byId('user-name'), userRole: byId('user-role'),
     userInitials: byId('user-initials'), userEmail: byId('user-email'),
     userPermissions: byId('user-permissions'), userPopover: byId('user-popover'),
@@ -165,7 +164,6 @@
     elements.loginForm.reset();
     window.clearInterval(state.autoRefreshTimer);
     state.autoRefreshTimer = null;
-    closeMenu();
     if (expired) showToast('Tu sesión terminó. Vuelve a ingresar para continuar.', true);
   }
 
@@ -185,7 +183,6 @@
     elements.userEmail.textContent = user.email;
     elements.userPermissions.textContent = `${(user.permissions || []).length} permisos activos`;
     elements.userInitials.textContent = name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-    byId('report-generator').hidden = !has('report.generate');
   }
 
   function showApp() {
@@ -193,7 +190,7 @@
     elements.app.hidden = false;
     displayUser();
     scheduleAutoRefresh();
-    navigate('overview');
+    refreshCurrentView();
   }
 
   function create(tag, className, content) {
@@ -204,6 +201,51 @@
   }
 
   function clear(node) { node.replaceChildren(); }
+
+  async function loadAllIncidentCustomers(incidentId) {
+    const firstPage = await api(`/incidents/${incidentId}/customers?limit=100`);
+    const totalPages = Math.ceil(Number(firstPage.total || 0) / 100);
+    if (totalPages <= 1) return firstPage;
+
+    const remainingPages = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) => api(`/incidents/${incidentId}/customers?page=${index + 2}&limit=100`)),
+    );
+    return {
+      ...firstPage,
+      data: [
+        ...(firstPage.data || []),
+        ...remainingPages.flatMap((page) => page.data || []),
+      ],
+    };
+  }
+
+  function downloadIncidentCustomersCsv(incident, customers) {
+    const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const rows = [
+      ['Código de incidente', 'Título', 'Cliente', 'Código de cliente', 'Serial ONU', 'Plan', 'Estado', 'Confirmado', 'Afectado desde', 'Restaurado'],
+      ...customers.map((customer) => [
+        incident.code,
+        incident.title,
+        customer.customerName || customer.customerCode || customer.externalCustomerId,
+        customer.customerCode || customer.externalCustomerId,
+        customer.onuSerial,
+        customer.planName,
+        customer.currentStatus,
+        customer.confirmed ? 'Sí' : 'No',
+        customer.affectedSince ? new Date(customer.affectedSince).toISOString() : '',
+        customer.restoredAt ? new Date(customer.restoredAt).toISOString() : '',
+      ]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(quote).join(',')).join('\r\n')}`;
+    const href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `clientes-afectados-${String(incident.code || incident.id).replace(/[^a-z0-9_-]/gi, '_')}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  }
 
   function emptyState(container, title, detail) {
     clear(container);
@@ -316,11 +358,7 @@
 
   function refreshCurrentView() {
     if (state.loadingViews.has(state.currentView)) return;
-    const loaders = {
-      overview: loadOverview, inventory: loadInventory, incidents: loadIncidents,
-      alerts: loadAlerts, reports: loadReports, analytics: loadAnalytics,
-    };
-    loaders[state.currentView]?.();
+    loadOverview();
   }
 
   function renderPagination(containerId, view, result) {
@@ -402,9 +440,7 @@
       setConnection('Cargando');
       setLiveStatus('Actualizando resumen…');
       try {
-        const [summary, incidents] = await Promise.all([
-          api('/dashboard/summary'), api('/incidents?limit=6'),
-        ]);
+        const summary = await api('/dashboard/summary');
         setMetric('metric-active', number(summary.activeIncidents));
         setMetric('metric-critical', number(summary.criticalIncidents));
         setMetric('metric-customers', number(summary.affectedCustomers));
@@ -423,10 +459,7 @@
           ? `${number(summary.criticalIncidents)} incidentes críticos requieren atención inmediata.`
           : `Sin incidentes críticos. ${number(summary.offlineOnus)} ONU offline bajo seguimiento.`;
         byId('overview-updated').textContent = `Actualizado ${date(new Date())}`;
-        const priority = incidents.data
-          .filter((item) => ['DISASTER', 'CRITICAL', 'MAJOR'].includes(item.severity))
-          .slice(0, 5);
-        table(byId('priority-incidents'), ['Incidente', 'Severidad', 'Estado', 'OLT', ''], priority.map((item) => incidentRow(item, true)), 'No hay incidentes prioritarios');
+        await loadIncidents();
         setConnection('En línea');
       } catch (error) { showViewError(error, 'No fue posible cargar el resumen.'); }
     });
@@ -441,23 +474,21 @@
   }
 
   async function loadIncidents() {
-    return whileLoading('incidents', async () => {
-      const form = byId('incident-filters');
-      const params = queryFromForm(form, ['localSearch']);
-      params.set('page', String(state.pagination.incidents));
-      params.set('limit', '25');
-      setLiveStatus('Actualizando incidentes…');
-      try {
-        const result = await api(`/incidents?${params}`);
-        const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
-        state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
-        byId('incidents-total').textContent = `${number(result.total)} encontrados`;
-        table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
-        renderFilterSummary('incident-filters', 'incident-filter-summary', 'incidents');
-        renderPagination('incidents-pagination', 'incidents', result);
-        setConnection('En línea');
-      } catch (error) { showViewError(error, 'No fue posible cargar los incidentes.'); }
-    });
+    const form = byId('incident-filters');
+    const params = queryFromForm(form, ['localSearch']);
+    params.set('page', String(state.pagination.incidents));
+    params.set('limit', '25');
+    setLiveStatus('Actualizando incidentes…');
+    try {
+      const result = await api(`/incidents?${params}`);
+      const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
+      state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
+      byId('incidents-total').textContent = `${number(result.total)} encontrados`;
+      table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
+      renderFilterSummary('incident-filters', 'incident-filter-summary', 'incidents');
+      renderPagination('incidents-pagination', 'incidents', result);
+      setConnection('En línea');
+    } catch (error) { showViewError(error, 'No fue posible cargar los incidentes.'); }
   }
 
   function inventoryRow(nap) {
@@ -602,7 +633,7 @@
     if (!elements.dialog.open) elements.dialog.showModal();
     try {
       const [incident, timeline, customers] = await Promise.all([
-        api(`/incidents/${id}`), api(`/incidents/${id}/timeline`), api(`/incidents/${id}/customers?limit=8`),
+        api(`/incidents/${id}`), api(`/incidents/${id}/timeline`), loadAllIncidentCustomers(id),
       ]);
       elements.dialogCode.textContent = incident.code;
       elements.dialogTitle.textContent = incident.title;
@@ -628,13 +659,33 @@
       if (!customers.data.length) customerSection.append(create('p', 'muted', 'Todavía no hay clientes asociados.'));
       else {
         const list = create('div', 'simple-list');
-        customers.data.forEach((customer) => {
+        const previewLimit = 8;
+        const customerRows = customers.data.map((customer, index) => {
           const row = create('div', 'simple-list-row');
           row.append(create('strong', '', customer.customerName || customer.customerCode || customer.externalCustomerId),
             create('span', '', `${customer.currentStatus} · ${customer.onuSerial || 'sin ONU'}`));
+          row.hidden = index >= previewLimit;
           list.append(row);
+          return row;
         });
         customerSection.append(list);
+        const actions = create('div', 'customer-list-actions');
+        if (customers.data.length > previewLimit) {
+          const toggle = create('button', 'button button--secondary', `Ver más clientes (${number(customers.data.length - previewLimit)})`);
+          toggle.type = 'button';
+          toggle.addEventListener('click', () => {
+            const expanded = toggle.dataset.expanded === 'true';
+            customerRows.slice(previewLimit).forEach((row) => { row.hidden = expanded; });
+            toggle.dataset.expanded = String(!expanded);
+            toggle.textContent = expanded ? `Ver más clientes (${number(customers.data.length - previewLimit)})` : 'Ver menos clientes';
+          });
+          actions.append(toggle);
+        }
+        const download = create('button', 'button button--primary', 'Descargar CSV');
+        download.type = 'button';
+        download.addEventListener('click', () => downloadIncidentCustomersCsv(incident, customers.data));
+        actions.append(download);
+        customerSection.append(actions);
       }
       elements.incidentDetail.append(customerSection);
       const timelineSection = create('section', 'detail-section');
@@ -670,7 +721,7 @@
           await api(path, { method: 'POST', body: JSON.stringify({ ...body, note: note.value.trim() || undefined }) });
           showToast(`${label}: operación registrada.`);
           await showIncident(incident.id);
-          loadOverview(); loadIncidents();
+          refreshCurrentView();
         } catch (error) { showToast(messageFrom(error, ''), true); }
         finally { setButtonBusy(button, false, label); }
       });
@@ -733,30 +784,6 @@
     setConnection('Sin conexión');
   }
 
-  const titles = { overview: 'Resumen', inventory: 'Inventario real', incidents: 'Incidentes', alerts: 'Alertas', reports: 'Reportes', analytics: 'Analítica y SLA' };
-  function viewFromHash() {
-    const view = window.location.hash.replace(/^#/, '');
-    return Object.hasOwn(titles, view) ? view : 'overview';
-  }
-
-  function navigate(view, fromHash = false) {
-    if (!Object.hasOwn(titles, view)) view = 'overview';
-    if (!fromHash && window.location.hash !== `#${view}`) {
-      window.location.hash = view;
-      return;
-    }
-    state.currentView = view;
-    document.querySelectorAll('.view').forEach((section) => section.classList.toggle('is-visible', section.id === view));
-    document.querySelectorAll('.nav-link').forEach((button) => button.classList.toggle('is-active', button.dataset.view === view));
-    elements.pageTitle.textContent = titles[view];
-    closeMenu();
-    updateAutoRefreshControl();
-    refreshCurrentView();
-  }
-
-  function openMenu() { elements.sidebar.classList.add('is-open'); elements.menuBackdrop.hidden = false; }
-  function closeMenu() { elements.sidebar.classList.remove('is-open'); elements.menuBackdrop.hidden = true; }
-
   async function login(event) {
     event.preventDefault();
     elements.loginError.hidden = true;
@@ -794,9 +821,6 @@
       elements.togglePassword.setAttribute('aria-pressed', String(willShowPassword));
       elements.password.focus();
     });
-    document.querySelectorAll('.nav-link').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.view)));
-    document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.go)));
-    byId('open-menu').addEventListener('click', openMenu); byId('close-menu').addEventListener('click', closeMenu); elements.menuBackdrop.addEventListener('click', closeMenu);
     elements.refreshView.addEventListener('click', refreshCurrentView);
     elements.autoRefresh.addEventListener('click', () => setAutoRefresh(!state.autoRefresh));
     elements.userMenu.addEventListener('click', () => {
@@ -807,17 +831,9 @@
     byId('logout').addEventListener('click', logout);
     byId('incident-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.incidents = 1; loadIncidents(); });
     byId('clear-incident-filters').addEventListener('click', () => { byId('incident-filters').reset(); state.pagination.incidents = 1; loadIncidents(); });
-    byId('inventory-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.inventory = 1; loadInventory(); });
-    byId('clear-inventory-filters').addEventListener('click', () => { byId('inventory-filters').reset(); state.pagination.inventory = 1; loadInventory(); });
-    byId('alert-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.alerts = 1; loadAlerts(); });
-    byId('clear-alert-filters').addEventListener('click', () => { byId('alert-filters').reset(); state.pagination.alerts = 1; loadAlerts(); });
-    byId('report-form').addEventListener('submit', generateReport);
     byId('incidents-table').addEventListener('click', (event) => { const button = event.target.closest('[data-incident-id]'); if (button) showIncident(button.dataset.incidentId); });
-    byId('priority-incidents').addEventListener('click', (event) => { const button = event.target.closest('[data-incident-id]'); if (button) showIncident(button.dataset.incidentId); });
-    byId('reports-table').addEventListener('click', (event) => { const button = event.target.closest('[data-report-id]'); if (button) downloadReport(button.dataset.reportId, button); });
     byId('close-dialog').addEventListener('click', () => elements.dialog.close());
     elements.dialog.addEventListener('click', (event) => { if (event.target === elements.dialog) elements.dialog.close(); });
-    window.addEventListener('hashchange', () => navigate(viewFromHash(), true));
     document.addEventListener('click', (event) => {
       if (!elements.userPopover.hidden && !elements.userMenu.contains(event.target) && !elements.userPopover.contains(event.target)) {
         elements.userPopover.hidden = true;
@@ -836,7 +852,7 @@
       elements.app.hidden = false;
       displayUser();
       scheduleAutoRefresh();
-      navigate(viewFromHash(), true);
+      refreshCurrentView();
     } catch { clearSession(); }
   }
 

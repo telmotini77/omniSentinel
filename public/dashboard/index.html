@@ -43,7 +43,7 @@
       [hidden] { display: none !important; }
       @media (max-width: 820px) { .login-shell { grid-template-columns: 1fr; } .login-intro { min-height: auto; padding: 2rem; border-right: 0; border-bottom: 1px solid rgba(148, 163, 184, .14); } .login-copy { margin: 4rem 0; } .login-copy h1 { max-width: 12ch; font-size: clamp(2.7rem, 12vw, 4.4rem); } .login-card-wrap { padding: 1.25rem; } }
     </style>
-    <link rel="stylesheet" href="/dashboard/styles.css?v=20260915.1" />
+    <link rel="stylesheet" href="/dashboard/styles.css?v=20260922.1" />
   </head>
   <body>
     <main id="login-view" class="login-shell">
@@ -105,48 +105,16 @@
       </section>
     </main>
 
-    <div id="app" class="app-shell" hidden>
-      <aside id="sidebar" class="sidebar" aria-label="Navegación principal">
-        <div class="sidebar-brand-row">
-          <a class="brand brand--light" href="/login" aria-label="OmniSentinel, inicio">
+    <div id="app" class="app-shell app-shell--single" hidden>
+      <section class="workspace">
+        <header class="topbar">
+          <a class="brand" href="/login" aria-label="OmniSentinel, inicio">
             <span class="brand-mark" aria-hidden="true">◉</span>
             <span>Omni<span>Sentinel</span></span>
           </a>
-          <button id="close-menu" class="icon-button mobile-only" type="button" aria-label="Cerrar menú">×</button>
-        </div>
-        <p class="sidebar-label">OPERACIÓN</p>
-        <nav class="navigation">
-          <button class="nav-link is-active" type="button" data-view="overview">
-            <span aria-hidden="true">▦</span><span>Resumen</span>
-          </button>
-          <button class="nav-link" type="button" data-view="inventory">
-            <span aria-hidden="true">⌘</span><span>Inventario real</span>
-          </button>
-          <button class="nav-link" type="button" data-view="incidents">
-            <span aria-hidden="true">!</span><span>Incidentes</span>
-          </button>
-          <button class="nav-link" type="button" data-view="alerts">
-            <span aria-hidden="true">⌁</span><span>Alertas</span>
-          </button>
-          <button class="nav-link" type="button" data-view="reports">
-            <span aria-hidden="true">▤</span><span>Reportes</span>
-          </button>
-          <button class="nav-link" type="button" data-view="analytics">
-            <span aria-hidden="true">◒</span><span>Analítica y SLA</span>
-          </button>
-        </nav>
-        <div class="sidebar-footer">
-          <a href="/api/docs" target="_blank" rel="noreferrer">Abrir documentación API ↗</a>
-          <span id="connection-status" class="connection-status">● Conectando</span>
-        </div>
-      </aside>
-
-      <div id="menu-backdrop" class="menu-backdrop" hidden></div>
-      <section class="workspace">
-        <header class="topbar">
-          <button id="open-menu" class="icon-button mobile-only" type="button" aria-label="Abrir menú">☰</button>
-          <div class="breadcrumb"><span id="page-kicker">OPERACIÓN</span><strong id="page-title">Resumen</strong></div>
+          <div class="breadcrumb"><span>OPERACIÓN</span><strong id="page-title">Centro de incidentes</strong></div>
           <div class="topbar-actions">
+            <span id="connection-status" class="connection-status">● Conectando</span>
             <span id="live-status" class="live-status" role="status" aria-live="polite">Actualización manual</span>
             <button id="auto-refresh" class="button button--secondary auto-refresh" type="button" aria-pressed="false" title="Activar actualización automática cada 30 segundos">
               <span aria-hidden="true">◷</span><span id="auto-refresh-label">Auto: pausada</span>
@@ -169,9 +137,9 @@
           <section id="overview" class="view is-visible" aria-labelledby="overview-title">
             <div class="page-heading">
               <div>
-                <p class="eyebrow">VISTA GENERAL</p>
-                <h1 id="overview-title">Estado de la operación</h1>
-                <p class="muted">Indicadores actuales de la red y los incidentes en seguimiento.</p>
+                <p class="eyebrow">OPERACIÓN EN VIVO</p>
+                <h1 id="overview-title">Centro de incidentes</h1>
+                <p class="muted">Estado de la red e incidentes en un solo lugar.</p>
               </div>
               <p id="overview-updated" class="updated-at">Actualizando…</p>
             </div>
@@ -185,28 +153,7 @@
               <div class="operations-pulse__copy"><span class="operations-pulse__signal" aria-hidden="true"></span><div><p class="eyebrow">PULSO OPERATIVO</p><h2 id="operations-pulse-title">Cargando estado de la red…</h2><p id="operations-pulse-detail">Consultando incidentes, disponibilidad y eventos recibidos.</p></div></div>
               <dl class="operations-pulse__stats"><div><dt>ONU offline</dt><dd id="pulse-onus">—</dd></div><div><dt>Resueltos hoy</dt><dd id="pulse-resolved">—</dd></div><div><dt>MTTR</dt><dd id="pulse-mttr">—</dd></div></dl>
             </section>
-            <section class="quick-actions" aria-label="Accesos rápidos">
-              <button class="quick-action" type="button" data-go="incidents">
-                <span class="quick-action-icon quick-action-icon--red" aria-hidden="true">!</span>
-                <span><strong>Atender incidentes</strong><small>Revisa los que siguen activos</small></span>
-                <span aria-hidden="true">→</span>
-              </button>
-              <button class="quick-action" type="button" data-go="alerts">
-                <span class="quick-action-icon quick-action-icon--blue" aria-hidden="true">⌁</span>
-                <span><strong>Ver alertas entrantes</strong><small>Confirma que los eventos estén llegando</small></span>
-                <span aria-hidden="true">→</span>
-              </button>
-              <button class="quick-action" type="button" data-go="inventory">
-                <span class="quick-action-icon quick-action-icon--green" aria-hidden="true">⌘</span>
-                <span><strong>Consultar inventario</strong><small>Busca una NAP u OLT real</small></span>
-                <span aria-hidden="true">→</span>
-              </button>
-            </section>
-            <div class="two-column">
-              <section class="panel" aria-labelledby="priority-incidents-title">
-                <div class="panel-head"><div><h2 id="priority-incidents-title">Prioridad operativa</h2><p>Incidentes críticos y mayores recientes.</p></div><button class="text-button" type="button" data-go="incidents">Ver todos</button></div>
-                <div id="priority-incidents" class="table-wrap"></div>
-              </section>
+            <div class="two-column overview-summary">
               <section class="panel readiness-card" aria-labelledby="network-status-title">
                 <div class="panel-head"><div><h2 id="network-status-title">Resumen de red</h2><p>Actualizado desde la operación en curso.</p></div></div>
                 <dl class="readiness-list">
@@ -217,28 +164,9 @@
                 <div class="help-callout"><span aria-hidden="true">i</span><p>Selecciona un incidente para revisar su línea de tiempo, eventos y clientes afectados.</p></div>
               </section>
             </div>
-          </section>
-
-          <section id="inventory" class="view" aria-labelledby="inventory-title">
-            <div class="page-heading">
-              <div><p class="eyebrow">API_ZASMAOLT</p><h1 id="inventory-title">Inventario real de NAPs</h1><p class="muted">Datos operativos leídos desde la caché autenticada de Smart OLT en api_zaSmaOlt.</p></div>
-              <span id="inventory-total" class="result-count"></span>
-            </div>
-            <form id="inventory-filters" class="filter-bar">
-              <label>Buscar<input name="search" type="search" placeholder="NAP u OLT" /></label>
-              <label>Estado<select name="status"><option value="">Todos los estados</option><option>ONLINE</option><option>PARTIAL</option><option>OFFLINE</option><option>UNKNOWN</option></select></label>
-              <label>OLT<input name="oltId" type="search" placeholder="Identificador de OLT" /></label>
-              <button class="button button--primary" type="submit">Consultar API</button>
-              <button id="clear-inventory-filters" class="button button--ghost" type="button">Limpiar</button>
-            </form>
-            <div id="inventory-filter-summary" class="filter-summary" aria-live="polite"></div>
-            <p id="inventory-source" class="updated-at">Consultando api_zaSmaOlt…</p>
-            <section class="panel"><div id="inventory-table" class="table-wrap"></div><nav id="inventory-pagination" class="pagination" aria-label="Paginación del inventario"></nav></section>
-          </section>
-
-          <section id="incidents" class="view" aria-labelledby="incidents-title">
-            <div class="page-heading">
-              <div><p class="eyebrow">SEGUIMIENTO</p><h1 id="incidents-title">Incidentes</h1><p class="muted">Filtra y abre un incidente para consultar su contexto completo.</p></div>
+            <section class="incident-workspace" aria-labelledby="incidents-title">
+            <div class="panel-head incident-workspace__head">
+              <div><p class="eyebrow">SEGUIMIENTO</p><h2 id="incidents-title">Incidentes en seguimiento</h2><p>Filtra y abre un incidente para consultar su contexto completo.</p></div>
               <span id="incidents-total" class="result-count"></span>
             </div>
             <form id="incident-filters" class="filter-bar">
@@ -251,49 +179,7 @@
             </form>
             <div id="incident-filter-summary" class="filter-summary" aria-live="polite"></div>
             <section class="panel"><div id="incidents-table" class="table-wrap"></div><nav id="incidents-pagination" class="pagination" aria-label="Paginación de incidentes"></nav></section>
-          </section>
-
-          <section id="alerts" class="view" aria-labelledby="alerts-title">
-            <div class="page-heading"><div><p class="eyebrow">ENTRADA DE RED</p><h1 id="alerts-title">Alertas</h1><p class="muted">Eventos recibidos y procesados por OmniSentinel.</p></div><span id="alerts-total" class="result-count"></span></div>
-            <form id="alert-filters" class="filter-bar">
-              <label>Severidad<select name="severity"><option value="">Todas las severidades</option><option>DISASTER</option><option>CRITICAL</option><option>MAJOR</option><option>MINOR</option><option>WARNING</option><option>INFO</option></select></label>
-              <label>Estado<select name="status"><option value="">Todos los estados</option><option>NEW</option><option>PROCESSING</option><option>CORRELATED</option><option>IGNORED</option><option>RESOLVED</option><option>ERROR</option></select></label>
-              <label>Origen<select name="source"><option value="">Todos los orígenes</option><option>API_ZASMAOLT</option></select></label>
-              <label>OLT<input name="oltExternalId" type="search" placeholder="ej. OLT-CUE-01" /></label>
-              <button class="button button--primary" type="submit">Aplicar filtros</button>
-              <button id="clear-alert-filters" class="button button--ghost" type="button">Limpiar</button>
-            </form>
-            <div id="alert-filter-summary" class="filter-summary" aria-live="polite"></div>
-            <section class="panel"><div id="alerts-table" class="table-wrap"></div><nav id="alerts-pagination" class="pagination" aria-label="Paginación de alertas"></nav></section>
-          </section>
-
-          <section id="reports" class="view" aria-labelledby="reports-title">
-            <div class="page-heading"><div><p class="eyebrow">DOCUMENTACIÓN</p><h1 id="reports-title">Reportes</h1><p class="muted">Consulta, descarga o genera reportes de la operación.</p></div></div>
-            <section id="report-generator" class="panel report-generator" hidden>
-              <div class="panel-head"><div><h2>Generar reporte</h2><p>El archivo quedará disponible en la tabla al terminar.</p></div></div>
-              <form id="report-form" class="report-form">
-                <label>Tipo<select name="type"><option value="DAILY_REPORT">Reporte diario</option><option value="WEEKLY_REPORT">Reporte semanal</option><option value="MONTHLY_REPORT">Reporte mensual</option><option value="SLA_REPORT">Reporte de SLA</option><option value="AVAILABILITY_REPORT">Reporte de disponibilidad</option><option value="OUTAGE_REPORT">Reporte de interrupciones</option><option value="INCIDENT_REPORT">Reporte de incidente</option></select></label>
-                <label>Formato<select name="format"><option value="PDF">PDF</option><option value="XLSX">Excel (XLSX)</option><option value="CSV">CSV</option><option value="JSON">JSON</option></select></label>
-                <label>Desde<input name="startDate" type="date" /></label>
-                <label>Hasta<input name="endDate" type="date" /></label>
-                <label class="field-wide">Título opcional<input name="title" type="text" maxlength="255" placeholder="Ej. Operación semanal Quito" /></label>
-                <button class="button button--primary" type="submit">Generar reporte</button>
-              </form>
             </section>
-            <section class="panel"><div id="reports-table" class="table-wrap"></div></section>
-          </section>
-
-          <section id="analytics" class="view" aria-labelledby="analytics-title">
-            <div class="page-heading"><div><p class="eyebrow">CALIDAD DE SERVICIO</p><h1 id="analytics-title">Analítica y SLA</h1><p class="muted">Tendencias de los últimos 30 días.</p></div></div>
-            <div class="metric-grid metric-grid--three">
-              <article class="metric-card"><p>Incidentes del período</p><strong id="analytics-incidents">—</strong><small id="analytics-resolved">—</small></article>
-              <article class="metric-card"><p>Clientes únicos afectados</p><strong id="analytics-customers">—</strong><small id="analytics-offline">—</small></article>
-              <article class="metric-card"><p>Disponibilidad SLA</p><strong id="analytics-availability">—</strong><small id="analytics-downtime">—</small></article>
-            </div>
-            <div class="two-column">
-              <section class="panel"><div class="panel-head"><div><h2>Incidentes por severidad</h2><p>Distribución del período seleccionado.</p></div></div><div id="severity-bars" class="bar-list"></div></section>
-              <section class="panel"><div class="panel-head"><div><h2>OLT con más incidentes</h2><p>Priorización por localización.</p></div></div><div id="top-olts" class="simple-list"></div></section>
-            </div>
           </section>
         </main>
       </section>
@@ -305,6 +191,6 @@
       <div id="incident-actions" class="dialog-actions"></div>
     </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script src="/dashboard/app.js?v=20260915.1" defer></script>
+    <script src="/dashboard/app.js?v=20260922.2" defer></script>
   </body>
 </html>
