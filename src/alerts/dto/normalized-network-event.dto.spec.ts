@@ -13,9 +13,9 @@ const event = {
 };
 
 describe('NormalizedNetworkEventDto', () => {
-  it('accepts events normalized by api_zaSmaOlt', async () => {
+  it.each(['pon.loss', 'pon.los', 'fiber.cut'])('accepts optical event %s', async (eventType) => {
     const errors = await validate(
-      plainToInstance(NormalizedNetworkEventDto, event),
+      plainToInstance(NormalizedNetworkEventDto, { ...event, eventType }),
     );
 
     expect(errors).toHaveLength(0);

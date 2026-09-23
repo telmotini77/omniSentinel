@@ -12,6 +12,7 @@ import type { ChangeIncidentStatusDto } from './dto/change-incident-status.dto';
 import type { IncidentActionDto } from './dto/incident-action.dto';
 import type { ListIncidentsQueryDto } from './dto/list-incidents-query.dto';
 import { assertIncidentTransition } from './incident-state-machine';
+import { APPROVED_ALERT_EVENT_TYPES } from '../alerts/constants/network-event-types';
 
 @Injectable()
 export class IncidentsService {
@@ -25,6 +26,7 @@ export class IncidentsService {
     query: ListIncidentsQueryDto,
   ): Promise<{ data: Incident[]; total: number; page: number; limit: number }> {
     const where: Prisma.IncidentWhereInput = {
+      events: { some: { eventType: { in: APPROVED_ALERT_EVENT_TYPES } } },
       status: query.status,
       severity: query.severity,
       type: query.type,
@@ -42,6 +44,10 @@ export class IncidentsService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.incident.findMany({
         where,
+        include: { events: {
+          where: { eventType: { in: APPROVED_ALERT_EVENT_TYPES } },
+          select: { eventType: true, payload: true }, orderBy: { occurredAt: 'asc' }, take: 1,
+        } },
         orderBy: { detectedAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,

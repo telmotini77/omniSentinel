@@ -12,6 +12,7 @@ import { PrismaService } from '../database/prisma.service';
 import { SlaService } from '../sla/sla.service';
 import type { SlaCalculation, SlaPeriod } from '../sla/sla.types';
 import type { AnalyticsPeriodQueryDto } from './dto/analytics-period-query.dto';
+import { APPROVED_ALERT_EVENT_TYPES } from '../alerts/constants/network-event-types';
 
 export interface CountByValue<T extends string> {
   value: T;
@@ -161,6 +162,7 @@ export class StatisticsService {
     period: SlaPeriod,
   ): Prisma.IncidentWhereInput {
     const filters: Prisma.IncidentWhereInput[] = [
+      { events: { some: { eventType: { in: APPROVED_ALERT_EVENT_TYPES } } } },
       {
         detectedAt: {
           gte: period.start,

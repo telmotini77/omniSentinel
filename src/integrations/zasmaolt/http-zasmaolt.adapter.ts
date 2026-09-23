@@ -32,6 +32,7 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
   async getCustomersForPon(
     oltExternalId: string,
     ponIdentifier: string,
+    smartOltAccountId?: string,
   ): Promise<ExternalCustomer[]> {
     const [board, pon] = ponIdentifier.split('/');
     if (!this.isPortPart(board) || !this.isPortPart(pon)) {
@@ -40,8 +41,11 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
         message: `PON identifier ${ponIdentifier} must use the board/port format`,
       });
     }
+    const accountQuery = smartOltAccountId
+      ? `?accountId=${encodeURIComponent(smartOltAccountId)}`
+      : '';
     const customersResponse = await this.request(
-      `/integration/v1/impact/olts/${encodeURIComponent(oltExternalId)}/pons/${encodeURIComponent(board)}/${encodeURIComponent(pon)}/customers`,
+      `/integration/v1/impact/olts/${encodeURIComponent(oltExternalId)}/pons/${encodeURIComponent(board)}/${encodeURIComponent(pon)}/customers${accountQuery}`,
     );
     return this.extractArray(customersResponse).map((customer) =>
       this.mapCustomer(customer),
@@ -124,6 +128,7 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
       nextCursor:
         this.readNonNegativeInteger(response, 'nextCursor', after) ?? after,
       hasMore: response.hasMore === true,
+      latestCursor: this.readNonNegativeInteger(response, 'latestCursor'),
     };
   }
 
@@ -239,6 +244,9 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
       serviceType: this.readString(customer, 'serviceType'),
       status: this.mapStatus(this.readString(customer, 'status')),
       rxPower: this.readNumber(customer, 'rxPower'),
+      napName: this.readString(customer, 'napName'),
+      oltAccountId: this.readString(customer, 'oltAccountId'),
+      oltSubdomain: this.readString(customer, 'oltSubdomain'),
     };
   }
 
@@ -267,6 +275,8 @@ export class HttpZasmaoltAdapter implements ZasmaoltAdapter {
       name,
       oltId,
       oltName: this.readString(nap, 'oltName') ?? oltId,
+      oltAccountId: this.readString(nap, 'oltAccountId'),
+      oltSubdomain: this.readString(nap, 'oltSubdomain'),
       board: this.readNonNegativeInteger(nap, 'board'),
       pon: this.readNonNegativeInteger(nap, 'pon'),
       status: safeStatus,

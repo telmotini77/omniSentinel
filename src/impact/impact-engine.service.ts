@@ -40,9 +40,11 @@ export class ImpactEngineService {
   async refreshIncident(incident: Incident): Promise<ImpactSummary> {
     if (!incident.oltExternalId || !incident.ponIdentifier)
       return this.emptySummary(incident.id);
+    const smartOltAccountId = await this.findSmartOltAccountId(incident.id);
     const customers = await this.zasmaolt.getCustomersForPon(
       incident.oltExternalId,
       incident.ponIdentifier,
+      smartOltAccountId,
     );
     const now = new Date();
     const previousCustomers = await this.prisma.incidentCustomer.findMany({
@@ -159,6 +161,7 @@ export class ImpactEngineService {
       onuSerial: customer.onuSerial,
       servicePlan: customer.servicePlan,
       serviceType: customer.serviceType,
+      napName: customer.napName,
       currentStatus: customer.status,
       rxPowerDuring: isOffline ? customer.rxPower : previous?.rxPowerDuring,
       rxPowerAfter: !isOffline ? customer.rxPower : previous?.rxPowerAfter,
@@ -223,5 +226,14 @@ export class ImpactEngineService {
       onlineOnus: 0,
       impactPercentage: 0,
     };
+  }
+
+  private async findSmartOltAccountId(incidentId: string): Promise<string | undefined> {
+    const event = await this.prisma.incidentEvent.findFirst({
+      where: { incidentId }, orderBy: { occurredAt: 'asc' }, select: { payload: true },
+    });
+    const payload = event?.payload as { externalReferences?: { smartoltAccountId?: unknown } } | undefined;
+    const accountId = payload?.externalReferences?.smartoltAccountId;
+    return typeof accountId === 'string' && accountId.trim() ? accountId.trim() : undefined;
   }
 }

@@ -10,6 +10,9 @@ export interface ExternalCustomer {
   serviceType?: string;
   status: CustomerConnectionStatus;
   rxPower?: number;
+  napName?: string;
+  oltAccountId?: string;
+  oltSubdomain?: string;
 }
 
 export type ExternalNapStatus = 'ONLINE' | 'PARTIAL' | 'OFFLINE' | 'UNKNOWN';
@@ -19,6 +22,8 @@ export interface ExternalNap {
   name: string;
   oltId: string;
   oltName: string;
+  oltAccountId?: string;
+  oltSubdomain?: string;
   board?: number;
   pon?: number;
   status: ExternalNapStatus;
@@ -58,12 +63,15 @@ export interface ExternalOperationalEventPage {
   data: ExternalOperationalEvent[];
   nextCursor: number;
   hasMore: boolean;
+  /** Highest source cursor, even when this page has no rows. */
+  latestCursor?: number;
 }
 
 export interface ZasmaoltAdapter {
   getCustomersForPon(
     oltExternalId: string,
     ponIdentifier: string,
+    smartOltAccountId?: string,
   ): Promise<ExternalCustomer[]>;
   listNaps(query: ExternalNapQuery): Promise<ExternalNapPage>;
   listOperationalEvents(

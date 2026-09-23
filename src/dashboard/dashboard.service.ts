@@ -3,6 +3,7 @@ import { AlertSeverity, IncidentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { SlaService } from '../sla/sla.service';
 import type { AnalyticsPeriodQueryDto } from '../statistics/dto/analytics-period-query.dto';
+import { APPROVED_ALERT_EVENT_TYPES } from '../alerts/constants/network-event-types';
 
 const OPEN_INCIDENT_STATUSES: IncidentStatus[] = [
   IncidentStatus.DETECTED,
@@ -95,6 +96,7 @@ export class DashboardService {
     query: AnalyticsPeriodQueryDto,
   ): Prisma.IncidentWhereInput {
     return {
+      events: { some: { eventType: { in: APPROVED_ALERT_EVENT_TYPES } } },
       oltExternalId: query.oltExternalId,
       ponIdentifier: query.ponIdentifier,
       customers: query.customerCode

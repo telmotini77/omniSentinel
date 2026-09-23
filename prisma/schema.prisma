@@ -484,6 +484,7 @@ model IncidentCustomer {
   onuSerial             String?                  @db.VarChar(150)
   servicePlan           String?                  @db.VarChar(150)
   serviceType           String?                  @db.VarChar(150)
+  napName               String?                  @db.VarChar(255)
   initialStatus         CustomerConnectionStatus @default(UNKNOWN)
   currentStatus         CustomerConnectionStatus @default(UNKNOWN)
   rxPowerBefore         Float?

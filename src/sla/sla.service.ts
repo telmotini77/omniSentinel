@@ -12,6 +12,7 @@ import type { AnalyticsPeriodQueryDto } from '../statistics/dto/analytics-period
 import type { CreateSlaSnapshotDto } from './dto/create-sla-snapshot.dto';
 import type { ListSlaRecordsQueryDto } from './dto/list-sla-records-query.dto';
 import type { DowntimeInterval, SlaCalculation, SlaPeriod } from './sla.types';
+import { APPROVED_ALERT_EVENT_TYPES } from '../alerts/constants/network-event-types';
 
 const DEFAULT_PERIOD_DAYS = 30;
 
@@ -123,6 +124,7 @@ export class SlaService {
     period: SlaPeriod,
   ): Prisma.IncidentWhereInput {
     const filters: Prisma.IncidentWhereInput[] = [
+      { events: { some: { eventType: { in: APPROVED_ALERT_EVENT_TYPES } } } },
       { detectedAt: { lt: period.end } },
       {
         OR: [

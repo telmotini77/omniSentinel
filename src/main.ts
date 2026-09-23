@@ -22,7 +22,18 @@ async function bootstrap(): Promise<void> {
   // OnModuleDestroy on the api_zaSmaOlt event puller, clears its timer, and
   // avoids overlapping pollers while the microservice is restarted.
   app.enableShutdownHooks();
-  app.use(helmet());
+  // OmniSentinel is intentionally exposed over plain HTTP on the private
+  // network. Do not advertise HSTS or CSP upgrade-insecure-requests here:
+  // either header makes browsers rewrite http://IP:3000 navigation to HTTPS,
+  // while TLS is terminated only when a dedicated HTTPS proxy is configured.
+  app.use(
+    helmet({
+      hsts: false,
+      contentSecurityPolicy: {
+        directives: { upgradeInsecureRequests: null },
+      },
+    }),
+  );
   const corsOrigins = config
     .getOrThrow<string>('CORS_ORIGINS')
     .split(',')

@@ -99,7 +99,27 @@ export class ZasmaoltEventPullerService
             'ZASMAOLT_EVENT_PULL_BATCH_SIZE',
           ),
         );
-        if (!page.data.length) return;
+        if (!page.data.length) {
+          // A source restore can reset its BIGSERIAL cursor. Without this
+          // check, a persisted cursor from the old source would silently skip
+          // every event from the restored outbox. Replaying from zero is safe:
+          // alert ingestion is deduplicated by the source eventId.
+          if (
+            page.latestCursor !== undefined &&
+            page.latestCursor < this.cursor
+          ) {
+            this.logger.warn(
+              {
+                storedCursor: this.cursor,
+                sourceCursor: page.latestCursor,
+              },
+              'api_zaSmaOlt event cursor reset detected; replaying source outbox safely',
+            );
+            await this.advanceCursorAfterSourceReset();
+            continue;
+          }
+          return;
+        }
         for (const item of page.data) await this.processItem(item);
         if (!page.hasMore) return;
       }
@@ -201,6 +221,15 @@ export class ZasmaoltEventPullerService
     });
   }
 
+  private async advanceCursorAfterSourceReset(): Promise<void> {
+    this.cursor = 0;
+    await this.prisma.systemSetting.upsert({
+      where: { key: CURSOR_KEY },
+      create: { key: CURSOR_KEY, value: 0 },
+      update: { value: 0 },
+    });
+  }
+
   private notificationEventFor(
     outcome:
       | 'CREATED'
@@ -223,4 +252,3 @@ export class ZasmaoltEventPullerService
 }
 
 class InvalidUpstreamEventError extends Error { }
-

@@ -52,6 +52,17 @@
       .footer { padding-bottom: 2rem; color: #71879b; font-size: .8rem; }
       @media (max-width: 780px) { .nav-status { display: none; } .hero { grid-template-columns: 1fr; min-height: auto; padding-top: 3rem; } .hero h1 { max-width: 10ch; } .features { grid-template-columns: 1fr; } .access { align-items: start; flex-direction: column; } .nav, .hero, .section, .footer { width: min(100% - 2rem, 1120px); } }
       @media (max-width: 430px) { .nav-actions .button-ghost { display: none; } .nav { padding-top: 1rem; } .brand { font-size: 1.05rem; } }
+      /* Public landing follows the same light operational palette as the panel. */
+      :root { color-scheme: light; color: #171717; background: #f7f7f7; }
+      body { background: #f7f7f7; }
+      .shell { background: linear-gradient(135deg, #fff 0 72%, #f5e8e8 72% 100%); }
+      .shell::before { background-image: linear-gradient(rgba(0,0,0,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.055) 1px, transparent 1px); }
+      .brand, .hero h1, .section h2, .feature h3, .card-stat strong { color: #171717; }
+      .brand em, .eyebrow { color: #d71920; }.brand-mark { background: #d71920; box-shadow: none; border-color: #d71920; }
+      .nav-status, .hero-copy, .hero-note, .section-heading p, .feature p, .footer { color: #5f6368; }
+      .button-primary { color: #fff; background: #d71920; box-shadow: 0 10px 22px rgba(215,25,32,.18); }.button-ghost { color: #171717; border-color: #bdbdbd; background: #fff; }
+      .signal-card, .feature { background: #fff; border-color: #dedede; box-shadow: 0 10px 28px rgba(0,0,0,.09); }.signal-card::after { background: rgba(215,25,32,.10); }.card-top, .card-stat span { color: #5f6368; }.card-top span:last-child { color: #18864b; }.wave i { background: linear-gradient(to top, #8f0d12, #ef4444); }
+      .access { border-color: #f0b3b5; background: #fde8e8; }.access p { color: #4b4b4b; }
     </style>
   </head>
   <body>

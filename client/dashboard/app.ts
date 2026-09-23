@@ -7,6 +7,7 @@
   const REFRESH_KEY = 'omniSentinel.refreshToken';
   const AUTO_REFRESH_KEY = 'omniSentinel.dashboard.autoRefresh';
   const AUTO_REFRESH_INTERVAL_MS = 30_000;
+  const OLT_NAME_TTL_MS = 5 * 60_000;
   const LIVE_VIEWS = new Set(['overview']);
   const state = {
     accessToken: sessionStorage.getItem(TOKEN_KEY),
@@ -18,6 +19,10 @@
     loadingViews: new Set(),
     autoRefresh: sessionStorage.getItem(AUTO_REFRESH_KEY) === 'true',
     autoRefreshTimer: null,
+    oltNames: new Map(),
+    oltNameRequests: new Map(),
+    previewIncident: null,
+    detailIncident: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -29,6 +34,7 @@
     userInitials: byId('user-initials'), userEmail: byId('user-email'),
     userPermissions: byId('user-permissions'), userPopover: byId('user-popover'),
     userMenu: byId('user-menu'), toast: byId('toast'), dialog: byId('incident-dialog'),
+    previewDialog: byId('incident-preview-dialog'),
     dialogTitle: byId('incident-dialog-title'), dialogCode: byId('incident-dialog-code'),
     incidentDetail: byId('incident-detail'), incidentActions: byId('incident-actions'),
     refreshView: byId('refresh-view'), autoRefresh: byId('auto-refresh'),
@@ -220,27 +226,39 @@
   }
 
   function downloadIncidentCustomersCsv(incident, customers) {
-    const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const quote = (value) => {
+      const raw = String(value ?? '');
+      const safe = /^\s*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+      return `"${safe.replaceAll('"', '""')}"`;
+    };
     const rows = [
-      ['Código de incidente', 'Título', 'Cliente', 'Código de cliente', 'Serial ONU', 'Plan', 'Estado', 'Confirmado', 'Afectado desde', 'Restaurado'],
-      ...customers.map((customer) => [
+      ['Código de incidente', 'Título', 'Severidad', 'Estado óptico', 'Seguimiento', 'OLT', 'PON', 'Caja NAP', 'Detectado', 'Descripción', 'Cliente', 'Código de cliente', 'Serial ONU', 'Plan', 'Estado del cliente', 'Confirmado', 'Afectado desde', 'Restaurado'],
+      ...(customers.length ? customers : [null]).map((customer) => [
         incident.code,
-        incident.title,
-        customer.customerName || customer.customerCode || customer.externalCustomerId,
-        customer.customerCode || customer.externalCustomerId,
-        customer.onuSerial,
-        customer.planName,
-        customer.currentStatus,
-        customer.confirmed ? 'Sí' : 'No',
-        customer.affectedSince ? new Date(customer.affectedSince).toISOString() : '',
-        customer.restoredAt ? new Date(customer.restoredAt).toISOString() : '',
+        incidentTitle(incident),
+        incident.severity,
+        opticalStatus(incident.events?.[0]?.eventType || state.incidents.find((item) => item.id === incident.id)?.events?.[0]?.eventType),
+        incident.status,
+        oltName(incident),
+        incident.ponIdentifier,
+        customer?.napName,
+        incident.detectedAt,
+        incident.description,
+        customer?.customerName || customer?.customerCode || customer?.externalCustomerId,
+        customer?.customerCode || customer?.externalCustomerId,
+        customer?.onuSerial,
+        customer?.planName,
+        customer?.currentStatus,
+        customer ? (customer.confirmed ? 'Sí' : 'No') : '',
+        customer?.affectedSince ? new Date(customer.affectedSince).toISOString() : '',
+        customer?.restoredAt ? new Date(customer.restoredAt).toISOString() : '',
       ]),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map(quote).join(',')).join('\r\n')}`;
     const href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = href;
-    link.download = `clientes-afectados-${String(incident.code || incident.id).replace(/[^a-z0-9_-]/gi, '_')}.csv`;
+    link.download = `incidente-${String(incident.code || incident.id).replace(/[^a-z0-9_-]/gi, '_')}.csv`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -280,13 +298,128 @@
     return node;
   }
 
-  function incidentRow(incident, compact = false) {
+  const GENERIC_OLT_NAMES = new Set(['', 'smart olt', 'olt desconocida', 'olt no identificada', 'desconocido', 'unknown', 'n/a', 'na']);
+
+  function isSpecificOltName(value) {
+    return !GENERIC_OLT_NAMES.has(String(value || '').trim().toLocaleLowerCase('es'));
+  }
+
+  function eventOltName(incident) {
+    const events = incident?.events || state.incidents.find((item) => item.id === incident?.id)?.events || [];
+    for (const event of events) {
+      const name = event?.payload?.device?.oltName;
+      if (isSpecificOltName(name)) return String(name).trim();
+    }
+    return '';
+  }
+
+  function oltName(incidentOrId) {
+    const incident = typeof incidentOrId === 'object' ? incidentOrId : null;
+    const directName = eventOltName(incident);
+    if (directName) return directName;
+    const oltExternalId = incident?.oltExternalId ?? incidentOrId;
+    if (!oltExternalId) return 'Sin OLT';
+    return state.oltNames.get(String(oltExternalId))?.name || 'Consultando Smart OLT…';
+  }
+
+  function incidentTitle(incident) {
+    const title = text(incident.title);
+    const id = String(incident.oltExternalId || '');
+    if (!id) return title;
+    const location = `${id}${incident.ponIdentifier ? ` PON ${incident.ponIdentifier}` : ''}`;
+    return title.endsWith(`: ${location}`)
+      ? `${title.slice(0, -location.length)}${oltName(incident)}${incident.ponIdentifier ? ` PON ${incident.ponIdentifier}` : ''}`
+      : title;
+  }
+
+  function incidentLocation(incident) {
+    return [oltName(incident), incident.ponIdentifier ? `PON ${incident.ponIdentifier}` : ''].filter(Boolean).join(' · ');
+  }
+
+  function opticalStatus(eventType) {
+    return eventType === 'pon.loss' ? 'LOSS' : ['pon.los', 'fiber.cut'].includes(eventType) ? 'LOS' : '—';
+  }
+
+  function updateOltLabels(id) {
+    document.querySelectorAll('[data-olt-external-id]').forEach((node) => {
+      if (node.dataset.oltExternalId !== id) return;
+      const incident = state.incidents.find((item) => item.id === node.dataset.incidentOltNameId);
+      node.textContent = oltName(incident || id);
+    });
+    document.querySelectorAll('[data-incident-title-id]').forEach((node) => {
+      const incident = state.incidents.find((item) => item.id === node.dataset.incidentTitleId);
+      if (incident?.oltExternalId === id) node.textContent = incidentTitle(incident);
+    });
+    if (state.previewIncident?.oltExternalId === id && elements.previewDialog.open) {
+      byId('incident-preview-title').textContent = incidentTitle(state.previewIncident);
+      byId('incident-preview-olt').textContent = incidentLocation(state.previewIncident);
+    }
+    if (state.detailIncident?.oltExternalId === id && elements.dialog.open) {
+      elements.dialogTitle.textContent = incidentTitle(state.detailIncident);
+      byId('incident-detail-olt').textContent = incidentLocation(state.detailIncident);
+    }
+  }
+
+  async function loadOltName(id) {
+    const cached = state.oltNames.get(id);
+    if (cached && Date.now() - cached.checkedAt < OLT_NAME_TTL_MS) return;
+    if (state.oltNameRequests.has(id)) return state.oltNameRequests.get(id);
+    const request = (async () => {
+      let name = 'Nombre no disponible en Smart OLT';
+      let checkedAt = Date.now();
+      try {
+        const names = new Map();
+        let page = 1;
+        let total = 0;
+        do {
+          const result = await api(`/inventory/naps?oltId=${encodeURIComponent(id)}&limit=200&page=${page}`);
+          total = Number(result.total || 0);
+          (result.data || []).forEach((nap) => {
+            const candidate = String(nap.oltName || '').trim();
+            if (String(nap.oltId) === id && isSpecificOltName(candidate) && candidate !== id && !/^\d+$/.test(candidate)) {
+              const subdomain = String(nap.oltSubdomain || '').trim();
+              const label = subdomain ? `${candidate} · ${subdomain}` : candidate;
+              names.set(label.toLocaleLowerCase('es'), label);
+            }
+          });
+          page += 1;
+        } while ((page - 1) * 200 < total);
+        if (names.size) name = [...names.values()].sort((left, right) => left.localeCompare(right, 'es')).join(' / ');
+      } catch {
+        checkedAt -= OLT_NAME_TTL_MS - 30_000;
+      }
+      state.oltNames.set(id, { name, checkedAt });
+      updateOltLabels(id);
+    })();
+    state.oltNameRequests.set(id, request);
+    try { await request; } finally { state.oltNameRequests.delete(id); }
+  }
+
+  async function loadOltNames(incidents) {
+    const ids = [...new Set(incidents.map((incident) => String(incident.oltExternalId || '')).filter(Boolean))];
+    for (let index = 0; index < ids.length; index += 4) {
+      await Promise.all(ids.slice(index, index + 4).map(loadOltName));
+    }
+  }
+
+  function incidentRow(incident) {
     const row = document.createElement('tr');
+    row.dataset.previewIncidentId = incident.id;
+    row.tabIndex = 0;
+    row.setAttribute('aria-label', `Vista previa del incidente ${incident.code}`);
+    row.classList.toggle('is-selected', state.previewIncident?.id === incident.id);
     const title = create('div', 'row-title');
-    title.append(create('strong', '', incident.code), create('span', '', incident.title));
+    const titleText = create('span', '', incidentTitle(incident));
+    titleText.dataset.incidentTitleId = incident.id;
+    title.append(create('strong', '', incident.code), titleText);
+    const olt = create('span', '', oltName(incident));
+    if (incident.oltExternalId) {
+      olt.dataset.oltExternalId = String(incident.oltExternalId);
+      olt.dataset.incidentOltNameId = incident.id;
+    }
     row.append(cell(title), cell(badge(incident.severity, 'severity')),
-      cell(badge(incident.status)), cell(incident.oltExternalId || 'Sin OLT'));
-    if (!compact) row.append(cell(number(incident.affectedCustomerCount)), cell(date(incident.detectedAt)));
+      cell(badge(opticalStatus(incident.events?.[0]?.eventType))), cell(olt));
+    row.append(cell(number(incident.affectedCustomerCount)), cell(date(incident.detectedAt)));
     const action = cell(undefined, 'action-cell');
     const open = create('button', 'table-button', 'Ver detalle');
     open.type = 'button';
@@ -341,7 +474,7 @@
     state.autoRefreshTimer = null;
     if (!state.autoRefresh) return;
     state.autoRefreshTimer = window.setInterval(() => {
-      if (document.hidden || elements.dialog.open || !LIVE_VIEWS.has(state.currentView)) return;
+      if (document.hidden || elements.dialog.open || elements.previewDialog.open || !LIVE_VIEWS.has(state.currentView)) return;
       refreshCurrentView();
     }, AUTO_REFRESH_INTERVAL_MS);
   }
@@ -394,7 +527,7 @@
   }
 
   const filterLabels = {
-    search: 'Buscar', status: 'Estado', oltId: 'OLT', oltExternalId: 'OLT',
+    search: 'Buscar', status: 'Seguimiento', oltId: 'OLT', oltExternalId: 'OLT',
     severity: 'Severidad', source: 'Origen', localSearch: 'Buscar',
   };
 
@@ -484,7 +617,8 @@
       const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
       state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
       byId('incidents-total').textContent = `${number(result.total)} encontrados`;
-      table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
+      table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado óptico', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
+      void loadOltNames(state.incidents);
       renderFilterSummary('incident-filters', 'incident-filter-summary', 'incidents');
       renderPagination('incidents-pagination', 'incidents', result);
       setConnection('En línea');
@@ -538,8 +672,8 @@
   function alertRow(alert) {
     const row = document.createElement('tr');
     const title = create('div', 'row-title');
-    title.append(create('strong', '', alert.eventType), create('span', '', alert.message || alert.externalEventId));
-    row.append(cell(title), cell(badge(alert.severity, 'severity')), cell(badge(alert.status)),
+    title.append(create('strong', '', opticalStatus(alert.eventType)), create('span', '', alert.message || alert.externalEventId));
+    row.append(cell(title), cell(badge(alert.severity, 'severity')), cell(badge(opticalStatus(alert.eventType))),
       cell(alert.source), cell(alert.oltExternalId || '—'), cell(date(alert.detectedAt)));
     return row;
   }
@@ -553,7 +687,7 @@
       try {
         const result = await api(`/alerts?${params}`);
         byId('alerts-total').textContent = `${number(result.total)} recibidas`;
-        table(byId('alerts-table'), ['Evento', 'Severidad', 'Estado', 'Origen', 'OLT', 'Detectado'], result.data.map(alertRow), 'No se encontraron alertas');
+        table(byId('alerts-table'), ['Evento', 'Severidad', 'Estado óptico', 'Origen', 'OLT', 'Detectado'], result.data.map(alertRow), 'No se encontraron alertas');
         renderFilterSummary('alert-filters', 'alert-filter-summary', 'alerts');
         renderPagination('alerts-pagination', 'alerts', result);
         setConnection('En línea');
@@ -625,30 +759,74 @@
     } catch (error) { showViewError(error, 'No fue posible cargar la analítica.'); }
   }
 
+  function showIncidentPreview(id) {
+    const incident = state.incidents.find((item) => item.id === id);
+    if (!incident) return;
+    state.previewIncident = incident;
+    byId('incident-preview-code').textContent = incident.code;
+    byId('incident-preview-title').textContent = incidentTitle(incident);
+    const summary = byId('incident-preview-summary');
+    clear(summary);
+    const values = [
+      ['Estado óptico', opticalStatus(incident.events?.[0]?.eventType)],
+      ['Seguimiento', text(incident.status).replaceAll('_', ' ')],
+      ['Severidad', incident.severity],
+      ['OLT / PON', incidentLocation(incident)],
+      ['Clientes afectados', number(incident.affectedCustomerCount)],
+      ['Detectado', date(incident.detectedAt)],
+    ];
+    values.forEach(([label, value]) => {
+      const card = create('div', 'detail-stat');
+      const content = create('strong', '', value);
+      if (label === 'OLT / PON') content.id = 'incident-preview-olt';
+      card.append(create('span', '', label), content);
+      summary.append(card);
+    });
+    byId('incident-preview-description').textContent = incident.description || 'Sin descripción adicional.';
+    document.querySelectorAll('[data-preview-incident-id]').forEach((row) => row.classList.toggle('is-selected', row.dataset.previewIncidentId === id));
+    // La vista rápida no debe interrumpir la tabla: se abre como panel lateral.
+    if (!elements.previewDialog.open) elements.previewDialog.show();
+    elements.app.classList.add('is-preview-open');
+    if (incident.oltExternalId) void loadOltName(String(incident.oltExternalId));
+  }
+
   async function showIncident(id) {
     elements.dialogCode.textContent = 'Cargando incidente…';
     elements.dialogTitle.textContent = 'Detalle del incidente';
+    state.detailIncident = null;
     clear(elements.incidentDetail);
     clear(elements.incidentActions);
     if (!elements.dialog.open) elements.dialog.showModal();
     try {
-      const [incident, timeline, customers] = await Promise.all([
-        api(`/incidents/${id}`), api(`/incidents/${id}/timeline`), loadAllIncidentCustomers(id),
+      const [incident, timeline] = await Promise.all([
+        api(`/incidents/${id}`), api(`/incidents/${id}/timeline`),
       ]);
+      const listedIncident = state.incidents.find((item) => item.id === id);
+      if (listedIncident?.events) incident.events = listedIncident.events;
+      // Los registros anteriores al campo Caja NAP se enriquecen al abrirse.
+      // Si la fuente no está disponible, se conserva el último impacto conocido.
+      if (has('incident.update')) {
+        try { await api(`/incidents/${id}/impact/refresh`, { method: 'POST' }); } catch { /* El detalle sigue disponible. */ }
+      }
+      const customers = await loadAllIncidentCustomers(id);
+      state.detailIncident = incident;
       elements.dialogCode.textContent = incident.code;
-      elements.dialogTitle.textContent = incident.title;
+      elements.dialogTitle.textContent = incidentTitle(incident);
       const summary = create('div', 'detail-summary');
       const values = [
         ['Estado', incident.status.replaceAll('_', ' ')], ['Severidad', incident.severity],
-        ['Ubicación', [incident.oltExternalId, incident.ponIdentifier].filter(Boolean).join(' · ') || 'Sin asignar'],
+        ['Ubicación', incidentLocation(incident)],
         ['Clientes afectados', number(incident.affectedCustomerCount)],
       ];
       values.forEach(([label, value]) => {
         const card = create('div', 'detail-stat');
-        card.append(create('span', '', label), create('strong', '', value));
+        const content = create('strong', '', value);
+        if (label === 'Ubicación') content.id = 'incident-detail-olt';
+        card.append(create('span', '', label), content);
         summary.append(card);
       });
       elements.incidentDetail.append(summary);
+      if (incident.oltExternalId) void loadOltName(String(incident.oltExternalId));
       if (incident.description) {
         const section = create('section', 'detail-section');
         section.append(create('h3', '', 'Descripción'), create('p', 'muted', incident.description));
@@ -658,16 +836,37 @@
       customerSection.append(create('h3', '', `Clientes afectados (${number(customers.total)})`));
       if (!customers.data.length) customerSection.append(create('p', 'muted', 'Todavía no hay clientes asociados.'));
       else {
-        const list = create('div', 'simple-list');
+        const list = create('div', 'simple-list customer-nap-list');
         const previewLimit = 8;
-        const customerRows = customers.data.map((customer, index) => {
-          const row = create('div', 'simple-list-row');
-          row.append(create('strong', '', customer.customerName || customer.customerCode || customer.externalCustomerId),
-            create('span', '', `${customer.currentStatus} · ${customer.onuSerial || 'sin ONU'}`));
-          row.hidden = index >= previewLimit;
-          list.append(row);
-          return row;
+        const customersByNap = new Map();
+        customers.data.forEach((customer) => {
+          const napName = text(customer.napName, 'Caja NAP no identificada');
+          const group = customersByNap.get(napName) || [];
+          group.push(customer);
+          customersByNap.set(napName, group);
         });
+        const customerRows = [];
+        const napGroups = [];
+        customersByNap.forEach((groupCustomers, napName) => {
+          const group = create('section', 'customer-nap-group');
+          group.append(create('h4', '', `Caja NAP: ${napName} (${number(groupCustomers.length)})`));
+          const groupRows = groupCustomers.map((customer) => {
+            const row = create('div', 'simple-list-row');
+            row.append(create('strong', '', customer.customerName || customer.customerCode || customer.externalCustomerId),
+              create('span', '', `${customer.currentStatus} · ${customer.onuSerial || 'sin ONU'}`));
+            group.append(row);
+            const entry = { row, index: customerRows.length };
+            customerRows.push(entry);
+            return entry;
+          });
+          napGroups.push({ group, rows: groupRows });
+          list.append(group);
+        });
+        const setCustomerVisibility = (expanded) => {
+          customerRows.forEach(({ row, index }) => { row.hidden = !expanded && index >= previewLimit; });
+          napGroups.forEach(({ group, rows }) => { group.hidden = rows.every(({ row }) => row.hidden); });
+        };
+        setCustomerVisibility(false);
         customerSection.append(list);
         const actions = create('div', 'customer-list-actions');
         if (customers.data.length > previewLimit) {
@@ -675,7 +874,7 @@
           toggle.type = 'button';
           toggle.addEventListener('click', () => {
             const expanded = toggle.dataset.expanded === 'true';
-            customerRows.slice(previewLimit).forEach((row) => { row.hidden = expanded; });
+            setCustomerVisibility(!expanded);
             toggle.dataset.expanded = String(!expanded);
             toggle.textContent = expanded ? `Ver más clientes (${number(customers.data.length - previewLimit)})` : 'Ver menos clientes';
           });
@@ -683,7 +882,13 @@
         }
         const download = create('button', 'button button--primary', 'Descargar CSV');
         download.type = 'button';
-        download.addEventListener('click', () => downloadIncidentCustomersCsv(incident, customers.data));
+        download.addEventListener('click', async () => {
+          setButtonBusy(download, true, 'Descargar CSV');
+          try {
+            if (incident.oltExternalId) await loadOltName(String(incident.oltExternalId));
+            downloadIncidentCustomersCsv(incident, customers.data);
+          } finally { setButtonBusy(download, false, 'Descargar CSV'); }
+        });
         actions.append(download);
         customerSection.append(actions);
       }
@@ -831,7 +1036,47 @@
     byId('logout').addEventListener('click', logout);
     byId('incident-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.incidents = 1; loadIncidents(); });
     byId('clear-incident-filters').addEventListener('click', () => { byId('incident-filters').reset(); state.pagination.incidents = 1; loadIncidents(); });
-    byId('incidents-table').addEventListener('click', (event) => { const button = event.target.closest('[data-incident-id]'); if (button) showIncident(button.dataset.incidentId); });
+    byId('incidents-table').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-incident-id]');
+      if (button) {
+        if (elements.previewDialog.open) elements.previewDialog.close();
+        showIncident(button.dataset.incidentId);
+        return;
+      }
+      const row = event.target.closest('[data-preview-incident-id]');
+      if (row) showIncidentPreview(row.dataset.previewIncidentId);
+    });
+    byId('incidents-table').addEventListener('keydown', (event) => {
+      if (!['Enter', ' '].includes(event.key) || event.target.closest('button')) return;
+      const row = event.target.closest('[data-preview-incident-id]');
+      if (!row) return;
+      event.preventDefault();
+      showIncidentPreview(row.dataset.previewIncidentId);
+    });
+    byId('close-preview').addEventListener('click', () => elements.previewDialog.close());
+    elements.previewDialog.addEventListener('click', (event) => { if (event.target === elements.previewDialog) elements.previewDialog.close(); });
+    elements.previewDialog.addEventListener('close', () => {
+      state.previewIncident = null;
+      elements.app.classList.remove('is-preview-open');
+      document.querySelectorAll('[data-preview-incident-id]').forEach((row) => row.classList.remove('is-selected'));
+    });
+    byId('preview-open-detail').addEventListener('click', () => {
+      const id = state.previewIncident?.id;
+      elements.previewDialog.close();
+      if (id) showIncident(id);
+    });
+    byId('preview-download-csv').addEventListener('click', async () => {
+      const incident = state.previewIncident;
+      if (!incident) return;
+      const button = byId('preview-download-csv');
+      setButtonBusy(button, true, 'Descargar CSV');
+      try {
+        if (incident.oltExternalId) await loadOltName(String(incident.oltExternalId));
+        const customers = await loadAllIncidentCustomers(incident.id);
+        downloadIncidentCustomersCsv(incident, customers.data || []);
+      } catch (error) { showToast(messageFrom(error, ''), true); }
+      finally { setButtonBusy(button, false, 'Descargar CSV'); }
+    });
     byId('close-dialog').addEventListener('click', () => elements.dialog.close());
     elements.dialog.addEventListener('click', (event) => { if (event.target === elements.dialog) elements.dialog.close(); });
     document.addEventListener('click', (event) => {

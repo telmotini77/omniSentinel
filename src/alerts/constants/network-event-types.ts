@@ -1,4 +1,5 @@
 export const NETWORK_EVENT_TYPES = [
+  'pon.loss',
   'pon.los',
   'fiber.cut',
 ] as const;

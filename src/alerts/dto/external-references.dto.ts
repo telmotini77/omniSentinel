@@ -13,4 +13,16 @@ export class ExternalReferencesDto {
   @IsString()
   @MaxLength(150)
   smartoltOltId?: string;
+
+  @ApiPropertyOptional({ example: 'norte' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  smartoltAccountId?: string;
+
+  @ApiPropertyOptional({ example: 'norte-red' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  smartoltSubdomain?: string;
 }
