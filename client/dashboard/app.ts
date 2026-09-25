@@ -232,25 +232,12 @@
       return `"${safe.replaceAll('"', '""')}"`;
     };
     const rows = [
-      ['Código de incidente', 'Título', 'Severidad', 'Estado óptico', 'Seguimiento', 'OLT', 'PON', 'Caja NAP', 'Detectado', 'Descripción', 'Cliente', 'Código de cliente', 'Serial ONU', 'Plan', 'Estado del cliente', 'Confirmado', 'Afectado desde', 'Restaurado'],
+      ['Código de incidente', 'Título', 'Cliente', 'Afectado desde', 'Restaurado'],
       ...(customers.length ? customers : [null]).map((customer) => [
         incident.code,
         incidentTitle(incident),
-        incident.severity,
-        opticalStatus(incident.events?.[0]?.eventType || state.incidents.find((item) => item.id === incident.id)?.events?.[0]?.eventType),
-        incident.status,
-        oltName(incident),
-        incident.ponIdentifier,
-        customer?.napName,
-        incident.detectedAt,
-        incident.description,
         customer?.customerName || customer?.customerCode || customer?.externalCustomerId,
-        customer?.customerCode || customer?.externalCustomerId,
-        customer?.onuSerial,
-        customer?.planName,
-        customer?.currentStatus,
-        customer ? (customer.confirmed ? 'Sí' : 'No') : '',
-        customer?.affectedSince ? new Date(customer.affectedSince).toISOString() : '',
+        customer?.affectedFrom ? new Date(customer.affectedFrom).toISOString() : '',
         customer?.restoredAt ? new Date(customer.restoredAt).toISOString() : '',
       ]),
     ];
@@ -607,19 +594,17 @@
   }
 
   async function loadIncidents() {
-    const form = byId('incident-filters');
-    const params = queryFromForm(form, ['localSearch']);
-    params.set('page', String(state.pagination.incidents));
-    params.set('limit', '25');
+    const params = new URLSearchParams({
+      page: String(state.pagination.incidents),
+      limit: '25',
+    });
     setLiveStatus('Actualizando incidentes…');
     try {
       const result = await api(`/incidents?${params}`);
-      const search = String(new FormData(form).get('localSearch') || '').trim().toLowerCase();
-      state.incidents = result.data.filter((item) => !search || `${item.code} ${item.title}`.toLowerCase().includes(search));
+      state.incidents = result.data;
       byId('incidents-total').textContent = `${number(result.total)} encontrados`;
       table(byId('incidents-table'), ['Incidente', 'Severidad', 'Estado óptico', 'OLT', 'Afectados', 'Detectado', ''], state.incidents.map((item) => incidentRow(item)), 'No se encontraron incidentes');
       void loadOltNames(state.incidents);
-      renderFilterSummary('incident-filters', 'incident-filter-summary', 'incidents');
       renderPagination('incidents-pagination', 'incidents', result);
       setConnection('En línea');
     } catch (error) { showViewError(error, 'No fue posible cargar los incidentes.'); }
@@ -1034,8 +1019,6 @@
       elements.userMenu.setAttribute('aria-expanded', String(visible));
     });
     byId('logout').addEventListener('click', logout);
-    byId('incident-filters').addEventListener('submit', (event) => { event.preventDefault(); state.pagination.incidents = 1; loadIncidents(); });
-    byId('clear-incident-filters').addEventListener('click', () => { byId('incident-filters').reset(); state.pagination.incidents = 1; loadIncidents(); });
     byId('incidents-table').addEventListener('click', (event) => {
       const button = event.target.closest('[data-incident-id]');
       if (button) {

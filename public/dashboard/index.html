@@ -166,18 +166,9 @@
             </div>
             <section class="incident-workspace" aria-labelledby="incidents-title">
             <div class="panel-head incident-workspace__head">
-              <div><p class="eyebrow">SEGUIMIENTO</p><h2 id="incidents-title">Incidentes en seguimiento</h2><p>Filtra y abre un incidente para consultar su contexto completo.</p></div>
+              <div><p class="eyebrow">SEGUIMIENTO</p><h2 id="incidents-title">Incidentes en seguimiento</h2><p>Abre un incidente para consultar su contexto completo.</p></div>
               <span id="incidents-total" class="result-count"></span>
             </div>
-            <form id="incident-filters" class="filter-bar">
-              <label>Seguimiento<select name="status"><option value="">Todas las etapas</option><option>DETECTED</option><option>INVESTIGATING</option><option>CONFIRMED</option><option>IN_PROGRESS</option><option>MONITORING</option><option>RESOLVED</option><option>CLOSED</option><option>FALSE_POSITIVE</option></select></label>
-              <label>Severidad<select name="severity"><option value="">Todas las severidades</option><option>DISASTER</option><option>CRITICAL</option><option>MAJOR</option><option>MINOR</option><option>WARNING</option><option>INFO</option></select></label>
-              <label>OLT<input name="oltExternalId" type="search" placeholder="ej. OLT-CUE-01" /></label>
-              <label>Buscar<input name="localSearch" type="search" placeholder="Código o título" /></label>
-              <button class="button button--primary" type="submit">Aplicar filtros</button>
-              <button id="clear-incident-filters" class="button button--ghost" type="button">Limpiar</button>
-            </form>
-            <div id="incident-filter-summary" class="filter-summary" aria-live="polite"></div>
             <section class="panel"><div id="incidents-table" class="table-wrap"></div><nav id="incidents-pagination" class="pagination" aria-label="Paginación de incidentes"></nav></section>
             </section>
           </section>
@@ -202,6 +193,6 @@
       </div>
     </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script src="/dashboard/app.js?v=20260923.3" defer></script>
+    <script src="/dashboard/app.js?v=20260924.1" defer></script>
   </body>
 </html>
